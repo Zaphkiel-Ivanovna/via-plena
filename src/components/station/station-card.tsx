@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/app-store';
 import { formatDistance } from '@/lib/format';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { MagicCard } from '@/components/ui/magic-card';
+import { BrandIcon } from './brand-icon';
 import { MapPin, ChevronRight } from 'lucide-react';
 import type { GasStation } from '@/types/station';
 
@@ -37,6 +38,7 @@ export function StationCard({ station, delay = 0 }: StationCardProps) {
           <div className="flex items-start justify-between">
             <div className="space-y-0.5 min-w-0 flex-1">
               <div className="flex items-center gap-2">
+                <BrandIcon brand={station.brand} size={14} className="shrink-0" />
                 <h3 className="text-sm font-semibold truncate">{station.brand}</h3>
                 <ChevronRight className="size-3.5 text-muted-foreground/50 shrink-0" />
               </div>

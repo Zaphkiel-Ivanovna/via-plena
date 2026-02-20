@@ -1,12 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { getStationById } from '@/services/station-service';
+import { fetchStationById } from '@/services/station-service';
 
 export function useStationDetail(id: number | null) {
   return useQuery({
     queryKey: ['station', id],
-    queryFn: () => getStationById(id!),
+    queryFn: () => fetchStationById(id!),
     enabled: id !== null,
   });
 }

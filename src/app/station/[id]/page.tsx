@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { BrandIcon } from '@/components/station/brand-icon';
 import { ArrowLeft, MapPin, Navigation, Clock } from 'lucide-react';
-import { getStationById } from '@/services/station-service';
+import { fetchStationById } from '@/services/station-service';
 import { FUEL_LABELS, SERVICE_LABELS } from '@/lib/constants';
 import { formatPrice, formatDate } from '@/lib/format';
 import type { Metadata } from 'next';
@@ -12,7 +13,7 @@ interface StationPageProps {
 
 export async function generateMetadata({ params }: StationPageProps): Promise<Metadata> {
   const { id } = await params;
-  const station = getStationById(Number(id));
+  const station = await fetchStationById(Number(id));
   if (!station) {
     return { title: 'Station non trouvee - ViaPlena' };
   }
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: StationPageProps): Promise<Me
 
 export default async function StationPage({ params }: StationPageProps) {
   const { id } = await params;
-  const station = getStationById(Number(id));
+  const station = await fetchStationById(Number(id));
 
   if (!station) {
     notFound();
@@ -52,7 +53,8 @@ export default async function StationPage({ params }: StationPageProps) {
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-xl font-bold">{station.name}</h1>
-                <span className="inline-flex items-center rounded-lg bg-primary/10 px-2.5 py-1 mt-2 text-xs font-medium text-primary border border-primary/20">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 mt-2 text-xs font-medium text-primary border border-primary/20">
+                  <BrandIcon brand={station.brand} size={14} />
                   {station.brand}
                 </span>
               </div>

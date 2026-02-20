@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Coordinates } from '@/types/geo';
 import { DEFAULT_MAP_THEME } from '@/lib/constants';
 
@@ -19,15 +20,23 @@ interface AppState {
   setMapTheme: (theme: string) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  location: null,
-  viewMode: 'map',
-  selectedStationId: null,
-  searchTerm: '',
-  mapTheme: DEFAULT_MAP_THEME,
-  setLocation: (location) => set({ location }),
-  setViewMode: (viewMode) => set({ viewMode }),
-  setSelectedStation: (selectedStationId) => set({ selectedStationId }),
-  setSearchTerm: (searchTerm) => set({ searchTerm }),
-  setMapTheme: (mapTheme) => set({ mapTheme }),
-}));
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      location: null,
+      viewMode: 'map',
+      selectedStationId: null,
+      searchTerm: '',
+      mapTheme: DEFAULT_MAP_THEME,
+      setLocation: (location) => set({ location }),
+      setViewMode: (viewMode) => set({ viewMode }),
+      setSelectedStation: (selectedStationId) => set({ selectedStationId }),
+      setSearchTerm: (searchTerm) => set({ searchTerm }),
+      setMapTheme: (mapTheme) => set({ mapTheme }),
+    }),
+    {
+      name: 'viaplena-settings',
+      partialize: (state) => ({ mapTheme: state.mapTheme }),
+    }
+  )
+);

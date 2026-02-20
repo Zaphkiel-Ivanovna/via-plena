@@ -8,14 +8,15 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
-import { BorderBeam } from '@/components/ui/border-beam';
 import { ShineBorder } from '@/components/ui/shine-border';
 import { FuelPriceBadge } from './fuel-price-badge';
 import { ServicesGrid } from './services-grid';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useStationDetail } from '@/hooks/use-station-detail';
 import { useIsMobile } from '@/hooks/use-media-query';
 import { formatDistance, formatDate } from '@/lib/format';
+import { BrandIcon } from './brand-icon';
 import { MapPin, Navigation, Clock } from 'lucide-react';
 
 export function StationDetail() {
@@ -41,18 +42,21 @@ export function StationDetail() {
     >
       <SheetContent
         side={isMobile ? 'bottom' : 'right'}
-        className={
+        overlayClassName="bg-transparent"
+        className={cn(
+          'island-panel border-0 overflow-hidden backdrop-blur-2xl backdrop-saturate-[180%]',
           isMobile
-            ? 'max-h-[85vh] rounded-t-3xl bg-background/90 backdrop-blur-xl'
-            : 'sm:max-w-md overflow-y-auto rounded-l-3xl bg-background/90 backdrop-blur-xl'
-        }
+            ? 'max-h-[85vh] rounded-3xl mx-2 mb-2 inset-x-2 bottom-2'
+            : 'sm:max-w-md h-auto top-3 bottom-3 right-3 rounded-3xl'
+        )}
       >
         {station ? (
-          <>
+          <div className="flex flex-col overflow-hidden h-full">
             <SheetHeader>
               <SheetTitle className="text-xl">{station.name}</SheetTitle>
               <SheetDescription className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary border border-primary/20">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary border border-primary/20">
+                  <BrandIcon brand={station.brand} size={12} />
                   {station.brand}
                 </span>
                 {station.distance !== undefined && (
@@ -63,7 +67,7 @@ export function StationDetail() {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="space-y-5 p-4 pt-0 overflow-y-auto">
+            <div className="space-y-5 p-4 pt-0 overflow-y-auto flex-1">
               <div className="island-subtle flex items-start gap-2 rounded-xl p-3">
                 <MapPin className="mt-0.5 size-4 shrink-0 text-primary/70" />
                 <p className="text-sm">
@@ -71,7 +75,7 @@ export function StationDetail() {
                 </p>
               </div>
 
-              <div className="island-subtle relative space-y-3 rounded-2xl p-4">
+              <div className="island-subtle relative space-y-3 rounded-2xl p-4 overflow-hidden">
                 <ShineBorder shineColor={['#6366f1', '#8b5cf6', '#a855f7']} borderWidth={1} duration={10} />
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <span className="inline-block size-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -112,21 +116,13 @@ export function StationDetail() {
                 </ShimmerButton>
               </a>
             </div>
-          </>
+          </div>
         ) : (
           <SheetHeader>
             <SheetTitle>Chargement...</SheetTitle>
             <SheetDescription />
           </SheetHeader>
         )}
-
-        <BorderBeam
-          size={120}
-          duration={8}
-          colorFrom="#6366f1"
-          colorTo="#a855f7"
-          borderWidth={1.5}
-        />
       </SheetContent>
     </Sheet>
   );

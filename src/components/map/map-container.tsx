@@ -6,9 +6,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { createRoot } from 'react-dom/client';
 import { ALL_MAP_THEMES, DEFAULT_CENTER, DEFAULT_ZOOM } from '@/lib/constants';
 import { useAppStore } from '@/stores/app-store';
+import { useFilterStore } from '@/stores/filter-store';
 import { useStations } from '@/hooks/use-stations';
 import { StationMarker } from './station-marker';
-import { StationPopup } from './station-popup';
 import { UserLocationMarker } from './user-location-marker';
 import type { GasStation } from '@/types/station';
 
@@ -21,37 +21,19 @@ export default function MapContainer() {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const userMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
 
   const location = useAppStore((s) => s.location);
   const selectedStationId = useAppStore((s) => s.selectedStationId);
   const setSelectedStation = useAppStore((s) => s.setSelectedStation);
   const mapTheme = useAppStore((s) => s.mapTheme);
+  const fuelTypes = useFilterStore((s) => s.fuelTypes);
   const { data: stations } = useStations();
 
+  const activeFuelType = fuelTypes.length === 1 ? fuelTypes[0] : undefined;
+
   const handleMarkerClick = useCallback(
-    (station: GasStation, marker: maplibregl.Marker) => {
+    (station: GasStation) => {
       setSelectedStation(station.id);
-
-      if (popupRef.current) {
-        popupRef.current.remove();
-      }
-
-      const popupEl = document.createElement('div');
-      const root = createRoot(popupEl);
-      root.render(<StationPopup station={station} />);
-
-      const popup = new maplibregl.Popup({ offset: 25, closeButton: true })
-        .setDOMContent(popupEl)
-        .setLngLat(marker.getLngLat());
-
-      popup.on('close', () => {
-        setSelectedStation(null);
-        root.unmount();
-      });
-
-      popupRef.current = popup;
-      popup.addTo(mapRef.current!);
     },
     [setSelectedStation]
   );
@@ -126,6 +108,7 @@ export default function MapContainer() {
       root.render(
         <StationMarker
           station={station}
+          fuelType={activeFuelType}
           isSelected={station.id === selectedStationId}
         />
       );
@@ -134,11 +117,11 @@ export default function MapContainer() {
         .setLngLat([station.longitude, station.latitude])
         .addTo(mapRef.current!);
 
-      el.addEventListener('click', () => handleMarkerClick(station, marker));
+      el.addEventListener('click', () => handleMarkerClick(station));
 
       markersRef.current.push(marker);
     });
-  }, [stations, selectedStationId, handleMarkerClick]);
+  }, [stations, selectedStationId, activeFuelType, handleMarkerClick]);
 
   return <div ref={mapContainerRef} className="h-full w-full" />;
 }
