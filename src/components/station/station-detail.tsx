@@ -47,8 +47,7 @@ export function StationDetail() {
       >
         {station ? (
           <div className="flex flex-col overflow-hidden h-full rounded-3xl border border-border/50 bg-background/70 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/30 dark:border-white/[0.08]">
-            {/* Header */}
-            <div className="p-6 pb-4 space-y-3">
+                        <div className="p-6 pb-4 space-y-3">
               <SheetHeader className="p-0 space-y-2">
                 <div className="flex items-start justify-between">
                   <div>
@@ -77,10 +76,8 @@ export function StationDetail() {
 
             <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
 
-            {/* Scrollable content */}
-            <div className="overflow-y-auto flex-1">
-              {/* Fuel prices */}
-              <div className="p-6 space-y-3">
+                        <div className="overflow-y-auto flex-1">
+                            <div className="p-6 space-y-3">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <span className="inline-block size-2 rounded-full bg-emerald-500" />
                   Prix des carburants
@@ -111,8 +108,7 @@ export function StationDetail() {
 
               <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
 
-              {/* Services */}
-              <div className="p-6 space-y-3">
+                            <div className="p-6 space-y-3">
                 <h4 className="text-sm font-semibold">Services</h4>
                 {station.services.length > 0 ? (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -133,8 +129,7 @@ export function StationDetail() {
 
               <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
 
-              {/* Directions */}
-              <div className="p-6 space-y-2">
+                            <div className="p-6 space-y-2">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
                   <Navigation className="size-3.5" />
                   Itinéraire
@@ -172,8 +167,7 @@ export function StationDetail() {
 
               <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
 
-              {/* Share */}
-              <div className="p-6">
+                            <div className="p-6">
                 <button
                   onClick={() => {
                     const url = `${window.location.origin}/station/${station.id}`;

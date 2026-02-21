@@ -184,11 +184,13 @@ export default function MapContainer() {
 
     if (!selectedStationId || !location || !stations) {
       cleanup();
-      if (!selectedStationId && location) {
-        map.flyTo({
-          center: [location.longitude, location.latitude],
-          zoom: DEFAULT_ZOOM,
-        });
+      if (!selectedStationId && location && map.getContainer()?.clientHeight) {
+        try {
+          map.flyTo({
+            center: [location.longitude, location.latitude],
+            zoom: DEFAULT_ZOOM,
+          });
+        } catch {}
       }
       return;
     }
@@ -200,10 +202,13 @@ export default function MapContainer() {
     }
 
     const drawRoute = () => {
-      const bounds = new maplibregl.LngLatBounds();
-      bounds.extend([location.longitude, location.latitude]);
-      bounds.extend([station.longitude, station.latitude]);
-      map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 420 }, maxZoom: 14 });
+      if (!map.getContainer()?.clientHeight) return;
+      try {
+        const bounds = new maplibregl.LngLatBounds();
+        bounds.extend([location.longitude, location.latitude]);
+        bounds.extend([station.longitude, station.latitude]);
+        map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 420 }, maxZoom: 14 });
+      } catch { /* map not ready */ }
 
       const url = `https://router.project-osrm.org/route/v1/driving/${location.longitude},${location.latitude};${station.longitude},${station.latitude}?overview=full&geometries=geojson`;
 

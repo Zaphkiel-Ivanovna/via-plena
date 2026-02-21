@@ -40,7 +40,6 @@ export function StationMap({ latitude, longitude, name }: StationMapProps) {
     mapRef.current = map;
 
     map.on('load', () => {
-      // Station marker
       new maplibregl.Marker({ color: '#6366f1' })
         .setLngLat([longitude, latitude])
         .setPopup(new maplibregl.Popup({ offset: 25 }).setText(name))
@@ -59,19 +58,16 @@ export function StationMap({ latitude, longitude, name }: StationMapProps) {
     if (!map || !userPos) return;
 
     const onReady = () => {
-      // User marker
       new maplibregl.Marker({ color: '#22c55e' })
         .setLngLat([userPos.lng, userPos.lat])
         .setPopup(new maplibregl.Popup({ offset: 25 }).setText('Ma position'))
         .addTo(map);
 
-      // Fit bounds to show both points
       const bounds = new maplibregl.LngLatBounds();
       bounds.extend([longitude, latitude]);
       bounds.extend([userPos.lng, userPos.lat]);
       map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
 
-      // Fetch route from OSRM
       const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${userPos.lng},${userPos.lat};${longitude},${latitude}?overview=full&geometries=geojson`;
 
       fetch(osrmUrl)
