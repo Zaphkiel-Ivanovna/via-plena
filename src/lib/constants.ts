@@ -1,12 +1,21 @@
 import type { FuelType, StationService } from '@/types/station';
 
 export const FUEL_LABELS: Record<FuelType, string> = {
-  gazole: 'Gazole',
-  sp95: 'SP95',
-  sp98: 'SP98',
+  gazole: 'B7',
+  sp95: 'E5',
+  sp98: 'E5+',
   e10: 'E10',
   e85: 'E85',
-  gplc: 'GPLc',
+  gplc: 'LPG',
+};
+
+export const FUEL_NAMES: Record<FuelType, string> = {
+  gazole: 'Diesel',
+  sp95: 'Sans Plomb 95',
+  sp98: 'Sans Plomb 98',
+  e10: 'Sans Plomb 95-E10',
+  e85: 'Superéthanol',
+  gplc: 'GPL carburant',
 };
 
 export const SERVICE_LABELS: Record<StationService, string> = {

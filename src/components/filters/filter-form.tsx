@@ -2,6 +2,7 @@
 
 import { FuelTypeFilter } from './fuel-type-filter';
 import { RadiusFilter } from './radius-filter';
+import { MarkerSizeFilter } from './marker-size-filter';
 import { useFilterStore } from '@/stores/filter-store';
 import { RotateCcw, SlidersHorizontal } from 'lucide-react';
 
@@ -27,6 +28,8 @@ export function FilterForm() {
       <FuelTypeFilter />
       <div className="island-separator h-px" />
       <RadiusFilter />
+      <div className="island-separator h-px" />
+      <MarkerSizeFilter />
     </div>
   );
 }

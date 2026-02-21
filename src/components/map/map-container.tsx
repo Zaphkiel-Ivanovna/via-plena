@@ -26,8 +26,9 @@ export default function MapContainer() {
   const selectedStationId = useAppStore((s) => s.selectedStationId);
   const setSelectedStation = useAppStore((s) => s.setSelectedStation);
   const mapTheme = useAppStore((s) => s.mapTheme);
+  const markerSize = useAppStore((s) => s.markerSize);
   const fuelTypes = useFilterStore((s) => s.fuelTypes);
-  const { data: stations } = useStations();
+  const { data: stations, isLoading } = useStations();
 
   const activeFuelType = fuelTypes.length === 1 ? fuelTypes[0] : undefined;
 
@@ -109,6 +110,7 @@ export default function MapContainer() {
         <StationMarker
           station={station}
           fuelType={activeFuelType}
+          scale={markerSize}
           isSelected={station.id === selectedStationId}
         />
       );
@@ -121,7 +123,21 @@ export default function MapContainer() {
 
       markersRef.current.push(marker);
     });
-  }, [stations, selectedStationId, activeFuelType, handleMarkerClick]);
+  }, [stations, selectedStationId, activeFuelType, markerSize, handleMarkerClick]);
 
-  return <div ref={mapContainerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={mapContainerRef} className="h-full w-full" />
+      {isLoading && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
+          <div className="island-panel flex items-center gap-2.5 rounded-2xl px-4 py-2.5 backdrop-blur-2xl backdrop-saturate-[180%]">
+            <div className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+            <span className="text-xs font-medium text-muted-foreground">
+              Chargement des stations...
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

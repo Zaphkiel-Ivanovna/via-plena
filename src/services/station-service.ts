@@ -2,7 +2,6 @@ import { mapApiStationToGasStation } from './station-mapper';
 import type { ApiStation, ApiStationWithDistance } from '@/api/types';
 import type { GasStation } from '@/types/station';
 import type { Coordinates } from '@/types/geo';
-import type { FilterState } from '@/types/filters';
 
 const BASE_URL = 'https://api.prix-carburants.2aaz.fr';
 
@@ -26,14 +25,14 @@ async function fetchStationDetail(id: number): Promise<ApiStation | null> {
  *
  * 1. Calls `/stations/around/` for the list (brand, distance, coordinates)
  * 2. Calls `/station/{id}` in parallel for each station to get fuel prices
+ *
+ * Returns ALL stations — filtering/sorting is done client-side in the hook.
  */
 export async function fetchStations(
-  filters: FilterState,
-  location: Coordinates | null
+  location: Coordinates,
+  radiusKm: number
 ): Promise<GasStation[]> {
-  if (!location) return [];
-
-  const radiusMeters = Math.min(filters.radius * 1000, 10000);
+  const radiusMeters = Math.min(radiusKm * 1000, 10000);
 
   const res = await fetch(
     `${BASE_URL}/stations/around/${location.latitude},${location.longitude}`,
@@ -57,44 +56,21 @@ export async function fetchStations(
   );
 
   // Merge: use detail data when available, fallback to list data
-  let stations = listData.map((listStation, i) => {
+  return listData.map((listStation, i) => {
     const detail = details[i];
     const detailData =
       detail.status === 'fulfilled' && detail.value ? detail.value : null;
 
     if (detailData) {
-      // Use full detail but preserve distance from list endpoint
-      const station = mapApiStationToGasStation({
+      return mapApiStationToGasStation({
         ...detailData,
         distance: listStation.distance,
         Distance: listStation.Distance,
       } as ApiStationWithDistance);
-      return station;
     }
 
     return mapApiStationToGasStation(listStation);
   });
-
-  // Client-side fuel type filter
-  if (filters.fuelTypes.length > 0) {
-    stations = stations.filter((s) =>
-      filters.fuelTypes.some((ft) => s.fuels.some((f) => f.type === ft))
-    );
-  }
-
-  // Client-side sort
-  if (filters.sortBy === 'distance') {
-    stations.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
-  } else if (filters.sortBy === 'price') {
-    const targetFuel = filters.fuelTypes[0] ?? 'gazole';
-    stations.sort((a, b) => {
-      const priceA = a.fuels.find((f) => f.type === targetFuel)?.price ?? Infinity;
-      const priceB = b.fuels.find((f) => f.type === targetFuel)?.price ?? Infinity;
-      return priceA - priceB;
-    });
-  }
-
-  return stations;
 }
 
 /**
