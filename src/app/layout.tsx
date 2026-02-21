@@ -17,6 +17,28 @@ export const metadata: Metadata = {
   title: "ViaPlena - Trouvez les meilleurs prix de carburant",
   description:
     "Comparez les prix des stations-service autour de vous et trouvez le carburant le moins cher.",
+  icons: {
+    icon: [
+      {
+        url: "/favicon-dark.png",
+        media: "(prefers-color-scheme: dark)",
+      },
+      {
+        url: "/favicon-light.png",
+        media: "(prefers-color-scheme: light)",
+      },
+    ],
+    apple: [
+      {
+        url: "/apple-touch-icon-dark.png",
+        media: "(prefers-color-scheme: dark)",
+      },
+      {
+        url: "/apple-touch-icon-light.png",
+        media: "(prefers-color-scheme: light)",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
