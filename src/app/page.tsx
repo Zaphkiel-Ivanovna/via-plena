@@ -64,6 +64,7 @@ export default function Home() {
 
   return (
     <div className={`relative h-dvh w-full overflow-hidden ${isDark ? 'bg-black' : 'bg-gray-100'}`}>
+      <h1 className="sr-only">Comparateur de prix de carburants en France</h1>
       <div className="absolute inset-0">
         <MapDynamic />
       </div>

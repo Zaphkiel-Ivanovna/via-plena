@@ -1,5 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-
-Sitemap: https://via-plena.zaphkiel.dev/sitemap.xml

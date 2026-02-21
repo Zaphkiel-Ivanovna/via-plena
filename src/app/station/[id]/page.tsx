@@ -7,7 +7,7 @@ import { StationMap } from '@/components/station/station-map';
 import { StationBackground } from '@/components/station/station-background';
 import { Logo } from '@/components/shared/logo';
 import { fetchStationById } from '@/services/station-service';
-import { FUEL_LABELS, SERVICE_LABELS } from '@/lib/constants';
+import { FUEL_LABELS, FUEL_NAMES, SERVICE_LABELS } from '@/lib/constants';
 import { formatPrice, formatDate } from '@/lib/format';
 import type { Metadata } from 'next';
 import type { GasStation } from '@/types/station';
@@ -33,6 +33,7 @@ export async function generateMetadata({ params }: StationPageProps): Promise<Me
     title,
     description,
     alternates: { canonical: url },
+    robots: { index: true, follow: true },
     openGraph: {
       type: 'website',
       url,
@@ -53,7 +54,9 @@ function buildStationJsonLd(station: GasStation) {
   return {
     '@context': 'https://schema.org',
     '@type': 'GasStation',
+    '@id': `${SITE_URL}/station/${station.id}#station`,
     name: station.name,
+    image: `${SITE_URL}/logo.png`,
     brand: { '@type': 'Brand', name: station.brand },
     address: {
       '@type': 'PostalAddress',
@@ -70,8 +73,37 @@ function buildStationJsonLd(station: GasStation) {
     url: `${SITE_URL}/station/${station.id}`,
     currenciesAccepted: 'EUR',
     ...(station.fuels.length > 0 && {
-      priceRange: `${formatPrice(Math.min(...station.fuels.map((f) => f.price)))} - ${formatPrice(Math.max(...station.fuels.map((f) => f.price)))}`,
+      makesOffer: station.fuels.map((fuel) => ({
+        '@type': 'Offer',
+        price: fuel.price,
+        priceCurrency: 'EUR',
+        itemOffered: {
+          '@type': 'Product',
+          name: FUEL_NAMES[fuel.type],
+        },
+      })),
     }),
+  };
+}
+
+function buildBreadcrumbJsonLd(station: GasStation) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      {
+        '@type': 'ListItem',
+        position: 1,
+        name: 'Accueil',
+        item: SITE_URL,
+      },
+      {
+        '@type': 'ListItem',
+        position: 2,
+        name: station.name,
+        item: `${SITE_URL}/station/${station.id}`,
+      },
+    ],
   };
 }
 
@@ -97,6 +129,10 @@ export default async function StationPage({ params }: StationPageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildStationJsonLd(station)) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBreadcrumbJsonLd(station)) }}
       />
       <main className="relative z-10 mx-auto max-w-2xl space-y-4">
         <div className="flex items-center justify-between">
