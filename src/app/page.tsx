@@ -8,13 +8,13 @@ import { HeaderIsland } from '@/components/layout/header-island';
 import { FilterIsland } from '@/components/layout/filter-island';
 import { useAppStore } from '@/stores/app-store';
 import { useGeolocation } from '@/hooks/use-geolocation';
-import { isMapThemeDark } from '@/lib/constants';
+import { isMapThemeDark, DEFAULT_CENTER } from '@/lib/constants';
 
 export default function Home() {
   const viewMode = useAppStore((s) => s.viewMode);
   const setLocation = useAppStore((s) => s.setLocation);
   const mapTheme = useAppStore((s) => s.mapTheme);
-  const { location, requestLocation } = useGeolocation();
+  const { location, error, loading, requestLocation } = useGeolocation();
 
   useEffect(() => {
     requestLocation();
@@ -23,8 +23,10 @@ export default function Home() {
   useEffect(() => {
     if (location) {
       setLocation(location);
+    } else if (error && !loading) {
+      setLocation(DEFAULT_CENTER);
     }
-  }, [location, setLocation]);
+  }, [location, error, loading, setLocation]);
 
   useEffect(() => {
     const html = document.documentElement;

@@ -4,6 +4,7 @@ import { SearchInput } from '@/components/shared/search-input';
 import { ViewToggle } from '@/components/shared/view-toggle';
 import { MobileFilterDrawer } from './mobile-filter-drawer';
 import { MapThemePicker } from '@/components/map/map-theme-picker';
+import { GeolocateButton } from '@/components/shared/geolocate-button';
 import { Logo } from '@/components/shared/logo';
 
 export function HeaderIsland() {
@@ -16,6 +17,7 @@ export function HeaderIsland() {
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0">
+        <GeolocateButton />
         <MapThemePicker />
         <MobileFilterDrawer />
         <ViewToggle />
