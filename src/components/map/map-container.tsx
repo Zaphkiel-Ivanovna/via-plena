@@ -4,17 +4,19 @@ import { useEffect, useRef, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createRoot } from 'react-dom/client';
-import { ALL_MAP_THEMES, DEFAULT_CENTER, DEFAULT_ZOOM } from '@/lib/constants';
+import { DEFAULT_CENTER, DEFAULT_ZOOM, getThemeUrl } from '@/lib/constants';
+import { createCircleGeoJSON } from '@/lib/geo-utils';
 import { useAppStore } from '@/stores/app-store';
 import { useFilterStore } from '@/stores/filter-store';
 import { useStations } from '@/hooks/use-stations';
 import { StationMarker } from './station-marker';
 import { UserLocationMarker } from './user-location-marker';
 import type { GasStation } from '@/types/station';
+import type { Feature, Polygon } from 'geojson';
 
-function getThemeUrl(themeId: string) {
-  return ALL_MAP_THEMES.find((t) => t.id === themeId)?.url ?? ALL_MAP_THEMES[0].url;
-}
+const RADIUS_SOURCE_ID = 'radius-circle';
+const RADIUS_FILL_LAYER = 'radius-circle-fill';
+const RADIUS_LINE_LAYER = 'radius-circle-line';
 
 export default function MapContainer() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -28,6 +30,7 @@ export default function MapContainer() {
   const mapTheme = useAppStore((s) => s.mapTheme);
   const markerSize = useAppStore((s) => s.markerSize);
   const fuelTypes = useFilterStore((s) => s.fuelTypes);
+  const radius = useFilterStore((s) => s.radius);
   const { data: stations, isLoading } = useStations();
 
   const activeFuelType = fuelTypes.length === 1 ? fuelTypes[0] : undefined;
@@ -95,6 +98,68 @@ export default function MapContainer() {
     userMarkerRef.current = marker;
   }, [location]);
 
+  // Radius circle layer
+  const addRadiusCircle = useCallback((map: maplibregl.Map, lat: number, lng: number, radiusKm: number) => {
+    const geojson = createCircleGeoJSON(lat, lng, radiusKm);
+
+    if (map.getSource(RADIUS_SOURCE_ID)) {
+      (map.getSource(RADIUS_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson as Feature<Polygon>);
+    } else {
+      map.addSource(RADIUS_SOURCE_ID, {
+        type: 'geojson',
+        data: geojson as Feature<Polygon>,
+      });
+      map.addLayer({
+        id: RADIUS_FILL_LAYER,
+        type: 'fill',
+        source: RADIUS_SOURCE_ID,
+        paint: {
+          'fill-color': '#3b82f6',
+          'fill-opacity': 0.08,
+        },
+      });
+      map.addLayer({
+        id: RADIUS_LINE_LAYER,
+        type: 'line',
+        source: RADIUS_SOURCE_ID,
+        paint: {
+          'line-color': '#3b82f6',
+          'line-width': 1.5,
+          'line-opacity': 0.4,
+          'line-dasharray': [4, 4],
+        },
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !location) return;
+
+    const update = () => addRadiusCircle(map, location.latitude, location.longitude, radius);
+
+    if (map.isStyleLoaded()) {
+      update();
+    } else {
+      map.once('style.load', update);
+    }
+  }, [location, radius, addRadiusCircle]);
+
+  // Re-add radius circle after style change (theme switch removes all layers)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const onStyleData = () => {
+      if (location && !map.getSource(RADIUS_SOURCE_ID)) {
+        addRadiusCircle(map, location.latitude, location.longitude, radius);
+      }
+    };
+
+    map.on('styledata', onStyleData);
+    return () => { map.off('styledata', onStyleData); };
+  }, [location, radius, addRadiusCircle]);
+
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -128,13 +193,21 @@ export default function MapContainer() {
   return (
     <div className="relative h-full w-full">
       <div ref={mapContainerRef} className="h-full w-full" />
-      {isLoading && (
+      {(isLoading || stations) && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
           <div className="island-panel flex items-center gap-2.5 rounded-2xl px-4 py-2.5 backdrop-blur-2xl backdrop-saturate-[180%]">
-            <div className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-            <span className="text-xs font-medium text-muted-foreground">
-              Chargement des stations...
-            </span>
+            {isLoading ? (
+              <>
+                <div className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Chargement des stations...
+                </span>
+              </>
+            ) : (
+              <span className="text-xs font-medium text-muted-foreground">
+                {stations!.length} station{stations!.length > 1 ? 's' : ''} trouvée{stations!.length > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
         </div>
       )}

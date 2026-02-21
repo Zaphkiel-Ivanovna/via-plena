@@ -1,23 +1,8 @@
 'use client';
 
-import { SERVICE_LABELS } from '@/lib/constants';
+import { SERVICE_LABELS, SERVICE_ICONS } from '@/lib/constants';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import type { StationService } from '@/types/station';
-
-const SERVICE_ICONS: Record<StationService, string> = {
-  lavage: '\u{1F6BF}',
-  boutique: '\u{1F6CD}\uFE0F',
-  gonflage: '\u{1F6DE}',
-  toilettes: '\u{1F6BB}',
-  restauration: '\u{1F354}',
-  wifi: '\u{1F4F6}',
-  automate_24_24: '\u{1F552}',
-  piste_poids_lourds: '\u{1F69A}',
-  relais_colis: '\u{1F4E6}',
-  aire_de_camping_car: '\u{1F6D0}',
-  gaz_domestique: '\u{1F525}',
-  bornes_electriques: '\u26A1',
-};
 
 interface ServicesGridProps {
   services: StationService[];

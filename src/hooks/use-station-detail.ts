@@ -8,5 +8,6 @@ export function useStationDetail(id: number | null) {
     queryKey: ['station', id],
     queryFn: () => fetchStationById(id!),
     enabled: id !== null,
+    staleTime: 5 * 60 * 1000,
   });
 }

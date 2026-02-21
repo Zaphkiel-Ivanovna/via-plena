@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { FuelPriceBadge } from './fuel-price-badge';
 import { useAppStore } from '@/stores/app-store';
 import { formatDistance } from '@/lib/format';
+import { getCheapestPrice } from '@/lib/station-utils';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { MagicCard } from '@/components/ui/magic-card';
 import { BrandIcon } from './brand-icon';
@@ -18,9 +19,7 @@ interface StationCardProps {
 export function StationCard({ station, delay = 0 }: StationCardProps) {
   const setSelectedStation = useAppStore((s) => s.setSelectedStation);
 
-  const cheapestPrice = station.fuels.length > 0
-    ? Math.min(...station.fuels.map((f) => f.price))
-    : null;
+  const cheapestPrice = getCheapestPrice(station);
 
   return (
     <BlurFade delay={delay}>

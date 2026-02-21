@@ -1,3 +1,4 @@
+import type { Feature, Polygon } from 'geojson';
 import type { Coordinates, BoundingBox } from '@/types/geo';
 
 const EARTH_RADIUS_KM = 6371;
@@ -30,4 +31,33 @@ export function isInBounds(
     coords.longitude >= bounds.west &&
     coords.longitude <= bounds.east
   );
+}
+
+export function createCircleGeoJSON(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  points = 64
+): Feature<Polygon> {
+  const coords: [number, number][] = [];
+
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI;
+    const dLat = (radiusKm / EARTH_RADIUS_KM) * (180 / Math.PI);
+    const dLng = dLat / Math.cos((lat * Math.PI) / 180);
+
+    coords.push([
+      lng + dLng * Math.cos(angle),
+      lat + dLat * Math.sin(angle),
+    ]);
+  }
+
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [coords],
+    },
+  };
 }

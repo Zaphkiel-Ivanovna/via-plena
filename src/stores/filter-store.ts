@@ -20,7 +20,7 @@ interface FilterState {
 
 const initialState = {
   fuelTypes: [] as FuelType[],
-  radius: 10,
+  radius: 5,
   brands: [] as string[],
   sortBy: 'distance' as SortBy,
 };

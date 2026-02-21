@@ -1,85 +1,86 @@
 import { mapApiStationToGasStation } from './station-mapper';
-import type { ApiStation, ApiStationWithDistance } from '@/api/types';
+import type { ApiStationWithDistance } from '@/api/types';
 import type { GasStation } from '@/types/station';
 import type { Coordinates } from '@/types/geo';
 
 const BASE_URL = 'https://api.prix-carburants.2aaz.fr';
+const PAGE_SIZE = 20;
+const RESPONSE_FIELDS = 'Brand,Address,Coordinates,Fuels,Price,distance,Distance';
 
 /**
- * Fetches a single station by ID with full details (including fuel prices).
+ * Fetches a page of stations around a location (with fuel prices).
  */
-async function fetchStationDetail(id: number): Promise<ApiStation | null> {
-  try {
-    const res = await fetch(`${BASE_URL}/station/${id}`, {
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+async function fetchStationPage(
+  location: Coordinates,
+  radiusMeters: number,
+  start: number,
+  end: number
+): Promise<ApiStationWithDistance[]> {
+  const res = await fetch(
+    `${BASE_URL}/stations/around/${location.latitude},${location.longitude}?responseFields=${RESPONSE_FIELDS}`,
+    {
+      headers: {
+        Accept: 'application/json',
+        Range: `station=${start}-${end},m=1-${radiusMeters}`,
+      },
+    }
+  );
+
+  if (res.status === 416) return []; // Out of range
+  if (!res.ok && res.status !== 206) {
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
+
+  return await res.json();
 }
 
 /**
- * Fetches stations around a location with full price details.
- *
- * 1. Calls `/stations/around/` for the list (brand, distance, coordinates)
- * 2. Calls `/station/{id}` in parallel for each station to get fuel prices
- *
- * Returns ALL stations — filtering/sorting is done client-side in the hook.
+ * Fetches all stations around a location within the given radius, with prices.
+ * Pages are fetched sequentially and stops as soon as stations exceed the radius.
+ * Since results are sorted by distance, no further pages are needed.
  */
 export async function fetchStations(
   location: Coordinates,
   radiusKm: number
 ): Promise<GasStation[]> {
-  const radiusMeters = Math.min(radiusKm * 1000, 10000);
+  const radiusMeters = radiusKm * 1000;
 
-  const res = await fetch(
-    `${BASE_URL}/stations/around/${location.latitude},${location.longitude}`,
-    {
-      headers: {
-        Accept: 'application/json',
-        Range: `station=1-20,m=1-${radiusMeters}`,
-      },
+  const listData: ApiStationWithDistance[] = [];
+  let page = 0;
+
+  while (true) {
+    const start = page * PAGE_SIZE + 1;
+    const end = (page + 1) * PAGE_SIZE;
+    const results = await fetchStationPage(location, radiusMeters, start, end);
+    if (results.length === 0) break;
+
+    // Results are sorted by distance — keep only those within radius
+    for (const station of results) {
+      if (station.distance > radiusMeters) return listData.map((s) => mapApiStationToGasStation(s));
+      listData.push(station);
     }
-  );
 
-  if (!res.ok && res.status !== 206) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (results.length < PAGE_SIZE) break;
+    page++;
   }
 
-  const listData: ApiStationWithDistance[] = await res.json();
-
-  // Fetch full details (with prices) for each station in parallel
-  const details = await Promise.allSettled(
-    listData.map((s) => fetchStationDetail(s.id))
-  );
-
-  // Merge: use detail data when available, fallback to list data
-  return listData.map((listStation, i) => {
-    const detail = details[i];
-    const detailData =
-      detail.status === 'fulfilled' && detail.value ? detail.value : null;
-
-    if (detailData) {
-      return mapApiStationToGasStation({
-        ...detailData,
-        distance: listStation.distance,
-        Distance: listStation.Distance,
-      } as ApiStationWithDistance);
-    }
-
-    return mapApiStationToGasStation(listStation);
-  });
+  return listData.map((s) => mapApiStationToGasStation(s));
 }
 
 /**
- * Fetches a single station by ID with full details (including fuel prices).
+ * Fetches a single station by ID with full details.
  */
 export async function fetchStationById(
   id: number
 ): Promise<GasStation | undefined> {
-  const data = await fetchStationDetail(id);
-  if (!data) return undefined;
-  return mapApiStationToGasStation(data);
+  try {
+    const res = await fetch(`${BASE_URL}/station/${id}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    return mapApiStationToGasStation(data);
+  } catch {
+    return undefined;
+  }
 }

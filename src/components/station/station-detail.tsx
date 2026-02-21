@@ -16,6 +16,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useStationDetail } from '@/hooks/use-station-detail';
 import { useIsMobile } from '@/hooks/use-media-query';
 import { formatDistance, formatDate } from '@/lib/format';
+import { getCheapestPrice, getDirectionsUrl } from '@/lib/station-utils';
 import { BrandIcon } from './brand-icon';
 import { MapPin, Navigation, Clock } from 'lucide-react';
 
@@ -25,13 +26,8 @@ export function StationDetail() {
   const isMobile = useIsMobile();
   const { data: station } = useStationDetail(selectedStationId);
 
-  const cheapestPrice = station?.fuels.length
-    ? Math.min(...station.fuels.map((f) => f.price))
-    : null;
-
-  const mapUrl = station
-    ? `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`
-    : '';
+  const cheapestPrice = station ? getCheapestPrice(station) : null;
+  const mapUrl = station ? getDirectionsUrl(station) : '';
 
   return (
     <Sheet

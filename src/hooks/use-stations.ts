@@ -16,6 +16,7 @@ export function useStations() {
     queryKey: ['stations', { radius, location }],
     queryFn: () => fetchStations(location!, radius),
     enabled: location !== null,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Client-side filtering & sorting (instant, no refetch)
