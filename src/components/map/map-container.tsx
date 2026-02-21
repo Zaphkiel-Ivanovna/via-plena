@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { createRoot } from 'react-dom/client';
@@ -11,6 +11,7 @@ import { useFilterStore } from '@/stores/filter-store';
 import { useStations } from '@/hooks/use-stations';
 import { StationMarker } from './station-marker';
 import { UserLocationMarker } from './user-location-marker';
+import { LocateFixed, Loader2 } from 'lucide-react';
 import type { GasStation } from '@/types/station';
 import type { Feature, Polygon } from 'geojson';
 
@@ -31,9 +32,31 @@ export default function MapContainer() {
   const markerSize = useAppStore((s) => s.markerSize);
   const fuelTypes = useFilterStore((s) => s.fuelTypes);
   const radius = useFilterStore((s) => s.radius);
+  const setLocation = useAppStore((s) => s.setLocation);
   const { data: stations, isLoading } = useStations();
+  const geoLoadingRef = useRef(false);
+  const [geoLoading, setGeoLoading] = useState(false);
 
   const activeFuelType = fuelTypes.length === 1 ? fuelTypes[0] : undefined;
+
+  const handleGeolocate = useCallback(() => {
+    if (geoLoadingRef.current) return;
+    geoLoadingRef.current = true;
+    setGeoLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        geoLoadingRef.current = false;
+        setGeoLoading(false);
+      },
+      () => {
+        geoLoadingRef.current = false;
+        setGeoLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, [setLocation]);
 
   const handleMarkerClick = useCallback(
     (station: GasStation) => {
@@ -193,6 +216,19 @@ export default function MapContainer() {
   return (
     <div className="relative h-full w-full">
       <div ref={mapContainerRef} className="h-full w-full" />
+      <button
+        onClick={handleGeolocate}
+        disabled={geoLoading}
+        className="absolute bottom-20 right-3 z-10 island-panel flex items-center justify-center size-10 rounded-xl backdrop-blur-2xl backdrop-saturate-[180%] transition-colors hover:bg-[var(--island-interactive-hover-bg)] disabled:opacity-50"
+        title="Me localiser"
+      >
+        {geoLoading ? (
+          <Loader2 className="size-4 animate-spin text-primary" />
+        ) : (
+          <LocateFixed className="size-4 text-primary" />
+        )}
+      </button>
+
       {(isLoading || stations) && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
           <div className="island-panel flex items-center gap-2.5 rounded-2xl px-4 py-2.5 backdrop-blur-2xl backdrop-saturate-[180%]">
