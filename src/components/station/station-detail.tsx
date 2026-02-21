@@ -16,7 +16,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useStationDetail } from '@/hooks/use-station-detail';
 import { useIsMobile } from '@/hooks/use-media-query';
 import { formatDistance, formatDate } from '@/lib/format';
-import { getCheapestPrice, getDirectionsUrl } from '@/lib/station-utils';
+import { getCheapestPrice, getGoogleMapsUrl, getWazeUrl, getAppleMapsUrl } from '@/lib/station-utils';
 import { BrandIcon } from './brand-icon';
 import { MapPin, Navigation, Clock } from 'lucide-react';
 
@@ -27,7 +27,6 @@ export function StationDetail() {
   const { data: station } = useStationDetail(selectedStationId);
 
   const cheapestPrice = station ? getCheapestPrice(station) : null;
-  const mapUrl = station ? getDirectionsUrl(station) : '';
 
   return (
     <Sheet
@@ -100,17 +99,40 @@ export function StationDetail() {
                 <ServicesGrid services={station.services} />
               </div>
 
-              <a href={mapUrl} target="_blank" rel="noopener noreferrer">
-                <ShimmerButton
-                  className="w-full rounded-2xl"
-                  shimmerColor="#6366f1"
-                  background="rgba(99, 102, 241, 0.9)"
-                  borderRadius="1rem"
-                >
-                  <Navigation className="size-4 mr-2" />
-                  Itineraire
-                </ShimmerButton>
-              </a>
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Navigation className="size-3.5" />
+                  Itinéraire
+                </h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <a href={getGoogleMapsUrl(station)} target="_blank" rel="noopener noreferrer">
+                    <ShimmerButton
+                      className="w-full rounded-2xl"
+                      shimmerColor="#6366f1"
+                      background="rgba(99, 102, 241, 0.9)"
+                      borderRadius="1rem"
+                    >
+                      <span className="text-xs">Google Maps</span>
+                    </ShimmerButton>
+                  </a>
+                  <a
+                    href={getWazeUrl(station)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="island-interactive flex items-center justify-center rounded-2xl px-3 py-2.5 text-xs font-medium transition-all hover:bg-[var(--island-interactive-hover-bg)]"
+                  >
+                    Waze
+                  </a>
+                  <a
+                    href={getAppleMapsUrl(station)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="island-interactive flex items-center justify-center rounded-2xl px-3 py-2.5 text-xs font-medium transition-all hover:bg-[var(--island-interactive-hover-bg)]"
+                  >
+                    Apple Plans
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         ) : (

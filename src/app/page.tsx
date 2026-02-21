@@ -13,8 +13,31 @@ import { isMapThemeDark, DEFAULT_CENTER } from '@/lib/constants';
 export default function Home() {
   const viewMode = useAppStore((s) => s.viewMode);
   const setLocation = useAppStore((s) => s.setLocation);
+  const setSelectedStation = useAppStore((s) => s.setSelectedStation);
+  const selectedStationId = useAppStore((s) => s.selectedStationId);
   const mapTheme = useAppStore((s) => s.mapTheme);
   const { location, error, loading, requestLocation } = useGeolocation();
+
+  // Sync URL query param → store on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stationParam = params.get('station');
+    if (stationParam) {
+      const id = Number(stationParam);
+      if (!isNaN(id)) setSelectedStation(id);
+    }
+  }, [setSelectedStation]);
+
+  // Sync store → URL when selectedStationId changes
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (selectedStationId !== null) {
+      url.searchParams.set('station', String(selectedStationId));
+    } else {
+      url.searchParams.delete('station');
+    }
+    window.history.replaceState(null, '', url.toString());
+  }, [selectedStationId]);
 
   useEffect(() => {
     requestLocation();

@@ -1,0 +1,30 @@
+{
+  "name": "ViaPlena - Comparateur de prix de carburant",
+  "short_name": "ViaPlena",
+  "description": "Comparez les prix des carburants en temps réel autour de vous. Trouvez la station-service la moins chère.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "portrait-primary",
+  "categories": ["utilities", "navigation"],
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/favicon-dark.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon-dark.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "480x480",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

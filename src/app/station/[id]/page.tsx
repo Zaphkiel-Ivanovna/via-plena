@@ -2,10 +2,14 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { BrandIcon } from '@/components/station/brand-icon';
 import { ArrowLeft, MapPin, Navigation, Clock } from 'lucide-react';
+import { StationMap } from '@/components/station/station-map';
 import { fetchStationById } from '@/services/station-service';
 import { FUEL_LABELS, SERVICE_LABELS } from '@/lib/constants';
 import { formatPrice, formatDate } from '@/lib/format';
 import type { Metadata } from 'next';
+import type { GasStation } from '@/types/station';
+
+const SITE_URL = 'https://via-plena.zaphkiel.dev';
 
 interface StationPageProps {
   params: Promise<{ id: string }>;
@@ -15,11 +19,56 @@ export async function generateMetadata({ params }: StationPageProps): Promise<Me
   const { id } = await params;
   const station = await fetchStationById(Number(id));
   if (!station) {
-    return { title: 'Station non trouvee - ViaPlena' };
+    return { title: 'Station non trouvée' };
   }
+
+  const title = `${station.name} (${station.brand}) - Prix carburants à ${station.city}`;
+  const description = `Prix des carburants à ${station.name} (${station.brand}), ${station.address}, ${station.postalCode} ${station.city}. ${station.fuels.map((f) => `${FUEL_LABELS[f.type]} : ${formatPrice(f.price)}`).join(', ')}.`;
+  const url = `${SITE_URL}/station/${id}`;
+
   return {
-    title: `${station.name} - ViaPlena`,
-    description: `Prix des carburants a ${station.name}, ${station.address}, ${station.postalCode} ${station.city}`,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'website',
+      url,
+      title,
+      description,
+      siteName: 'ViaPlena',
+      locale: 'fr_FR',
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+    },
+  };
+}
+
+function buildStationJsonLd(station: GasStation) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'GasStation',
+    name: station.name,
+    brand: { '@type': 'Brand', name: station.brand },
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: station.address,
+      addressLocality: station.city,
+      postalCode: station.postalCode,
+      addressCountry: 'FR',
+    },
+    geo: {
+      '@type': 'GeoCoordinates',
+      latitude: station.latitude,
+      longitude: station.longitude,
+    },
+    url: `${SITE_URL}/station/${station.id}`,
+    currenciesAccepted: 'EUR',
+    ...(station.fuels.length > 0 && {
+      priceRange: `${formatPrice(Math.min(...station.fuels.map((f) => f.price)))} - ${formatPrice(Math.max(...station.fuels.map((f) => f.price)))}`,
+    }),
   };
 }
 
@@ -35,10 +84,16 @@ export default async function StationPage({ params }: StationPageProps) {
     ? Math.min(...station.fuels.map((f) => f.price))
     : null;
 
-  const mapUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`;
+  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`;
+  const wazeUrl = `https://www.waze.com/ul?ll=${station.latitude},${station.longitude}&navigate=yes`;
+  const appleMapsUrl = `https://maps.apple.com/?daddr=${station.latitude},${station.longitude}`;
 
   return (
     <div className="min-h-dvh bg-black/95 p-4 md:p-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildStationJsonLd(station)) }}
+      />
       <main className="mx-auto max-w-2xl space-y-4">
         <Link
           href="/"
@@ -117,16 +172,37 @@ export default async function StationPage({ params }: StationPageProps) {
 
           <div className="h-px bg-white/[0.06]" />
 
-          <div className="p-6">
-            <a
-              href={mapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-2xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
-            >
-              <Navigation className="size-4" />
-              Itineraire
-            </a>
+          <div className="p-6 space-y-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Navigation className="size-3.5" />
+              Itinéraire
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <a
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
+              >
+                Google Maps
+              </a>
+              <a
+                href={wazeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-sm font-medium transition-all hover:bg-white/[0.1]"
+              >
+                Waze
+              </a>
+              <a
+                href={appleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-sm font-medium transition-all hover:bg-white/[0.1]"
+              >
+                Apple Plans
+              </a>
+            </div>
           </div>
         </div>
       </main>
