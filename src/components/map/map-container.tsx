@@ -73,11 +73,12 @@ export default function MapContainer() {
 
   useEffect(() => {
     if (!mapRef.current || !location) return;
+    setSelectedStation(null);
     mapRef.current.flyTo({
       center: [location.longitude, location.latitude],
       zoom: DEFAULT_ZOOM,
     });
-  }, [location]);
+  }, [location, setSelectedStation]);
 
   useEffect(() => {
     if (!mapRef.current || !location) return;
@@ -159,6 +160,158 @@ export default function MapContainer() {
     map.on('styledata', onStyleData);
     return () => { map.off('styledata', onStyleData); };
   }, [location, radius, addRadiusCircle]);
+
+  // Route to selected station
+  const routeAnimRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const ROUTE_SOURCE = 'route-to-station';
+    const ROUTE_GLOW = 'route-to-station-glow';
+    const ROUTE_BG = 'route-to-station-bg';
+    const ROUTE_LINE = 'route-to-station-line';
+
+    const cleanup = () => {
+      if (routeAnimRef.current) cancelAnimationFrame(routeAnimRef.current);
+      routeAnimRef.current = null;
+      for (const id of [ROUTE_LINE, ROUTE_BG, ROUTE_GLOW]) {
+        if (map.getLayer(id)) map.removeLayer(id);
+      }
+      if (map.getSource(ROUTE_SOURCE)) map.removeSource(ROUTE_SOURCE);
+    };
+
+    if (!selectedStationId || !location || !stations) {
+      cleanup();
+      if (!selectedStationId && location) {
+        map.flyTo({
+          center: [location.longitude, location.latitude],
+          zoom: DEFAULT_ZOOM,
+        });
+      }
+      return;
+    }
+
+    const station = stations.find((s) => s.id === selectedStationId);
+    if (!station) {
+      cleanup();
+      return;
+    }
+
+    const drawRoute = () => {
+      const bounds = new maplibregl.LngLatBounds();
+      bounds.extend([location.longitude, location.latitude]);
+      bounds.extend([station.longitude, station.latitude]);
+      map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 420 }, maxZoom: 14 });
+
+      const url = `https://router.project-osrm.org/route/v1/driving/${location.longitude},${location.latitude};${station.longitude},${station.latitude}?overview=full&geometries=geojson`;
+
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.routes?.[0] || !mapRef.current) return;
+          cleanup();
+
+          const geojson = { type: 'Feature' as const, properties: {}, geometry: data.routes[0].geometry };
+
+          map.addSource(ROUTE_SOURCE, { type: 'geojson', data: geojson });
+
+          // Glow layer (wide, blurred effect)
+          map.addLayer({
+            id: ROUTE_GLOW,
+            type: 'line',
+            source: ROUTE_SOURCE,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#6366f1', 'line-width': 14, 'line-opacity': 0, 'line-blur': 12 },
+          });
+
+          // Background line (dark outline)
+          map.addLayer({
+            id: ROUTE_BG,
+            type: 'line',
+            source: ROUTE_SOURCE,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#312e81', 'line-width': 6, 'line-opacity': 0 },
+          });
+
+          // Main route line with dash animation
+          map.addLayer({
+            id: ROUTE_LINE,
+            type: 'line',
+            source: ROUTE_SOURCE,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#818cf8', 'line-width': 4, 'line-opacity': 0 },
+          });
+
+          // Animate: reveal route progressively
+          const coords = geojson.geometry.coordinates as [number, number][];
+          const totalPoints = coords.length;
+          const duration = 1500; // ms
+          const startTime = performance.now();
+
+          const animate = (now: number) => {
+            if (!mapRef.current) return;
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const pointCount = Math.max(2, Math.floor(eased * totalPoints));
+
+            const partialCoords = coords.slice(0, pointCount);
+            const partialGeojson = {
+              type: 'Feature' as const,
+              properties: {},
+              geometry: { type: 'LineString' as const, coordinates: partialCoords },
+            };
+
+            (map.getSource(ROUTE_SOURCE) as maplibregl.GeoJSONSource)?.setData(partialGeojson);
+
+            // Fade in layers
+            const opacity = Math.min(progress * 2, 1);
+            map.setPaintProperty(ROUTE_GLOW, 'line-opacity', opacity * 0.15);
+            map.setPaintProperty(ROUTE_BG, 'line-opacity', opacity * 0.6);
+            map.setPaintProperty(ROUTE_LINE, 'line-opacity', opacity * 0.9);
+            if (progress < 1) {
+              routeAnimRef.current = requestAnimationFrame(animate);
+            } else {
+              // After animation: switch to full line, start dash animation
+              map.setPaintProperty(ROUTE_LINE, 'line-dasharray', [0, 4, 3]);
+              routeAnimRef.current = null;
+
+              // Pulsing dash animation
+              let dashOffset = 0;
+              const animateDash = () => {
+                if (!mapRef.current || !map.getLayer(ROUTE_LINE)) return;
+                dashOffset = (dashOffset + 0.15) % 7;
+                map.setPaintProperty(ROUTE_LINE, 'line-dasharray', [dashOffset, 4, 3]);
+                routeAnimRef.current = requestAnimationFrame(animateDash);
+              };
+              routeAnimRef.current = requestAnimationFrame(animateDash);
+            }
+          };
+
+          routeAnimRef.current = requestAnimationFrame(animate);
+        })
+        .catch(() => {});
+    };
+
+    if (map.isStyleLoaded()) {
+      drawRoute();
+    } else {
+      map.once('style.load', drawRoute);
+    }
+
+    return cleanup;
+  }, [selectedStationId, location, stations]);
+
+  // Close drawer if selected station is no longer in filtered results
+  useEffect(() => {
+    if (!selectedStationId || !stations) return;
+    if (!stations.some((s) => s.id === selectedStationId)) {
+      setSelectedStation(null);
+    }
+  }, [stations, selectedStationId, setSelectedStation]);
 
   useEffect(() => {
     if (!mapRef.current) return;
