@@ -15,7 +15,7 @@ import { formatDistance, formatPrice, formatDate } from '@/lib/format';
 import { getCheapestPrice, getGoogleMapsUrl, getWazeUrl, getAppleMapsUrl } from '@/lib/station-utils';
 import { FUEL_LABELS, SERVICE_LABELS, SERVICE_ICONS } from '@/lib/constants';
 import { BrandIcon } from './brand-icon';
-import { MapPin, Navigation, Clock } from 'lucide-react';
+import { MapPin, Navigation, Clock, Share2 } from 'lucide-react';
 import { SiGooglemaps, SiWaze, SiApple } from '@icons-pack/react-simple-icons';
 
 export function StationDetail() {
@@ -168,6 +168,26 @@ export function StationDetail() {
                     Plans
                   </a>
                 </div>
+              </div>
+
+              <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
+
+              {/* Share */}
+              <div className="p-6">
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/station/${station.id}`;
+                    if (navigator.share) {
+                      navigator.share({ title: station.name, url });
+                    } else {
+                      navigator.clipboard.writeText(url);
+                    }
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium shadow-sm transition-all hover:bg-muted/50 dark:shadow-none dark:border-white/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
+                >
+                  <Share2 className="size-4" />
+                  Partager cette station
+                </button>
               </div>
             </div>
           </div>
