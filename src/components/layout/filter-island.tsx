@@ -11,6 +11,17 @@ export function FilterIsland() {
           <FilterForm />
         </div>
       </ScrollArea>
+      <div className="border-t border-border/50 px-5 py-3 text-center text-[11px] text-muted-foreground/60">
+        Made with ❤️ by{' '}
+        <a
+          href="https://github.com/Zaphkiel-Ivanovna"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 transition-colors hover:text-muted-foreground"
+        >
+          Zaphkiel
+        </a>
+      </div>
     </aside>
   );
 }
