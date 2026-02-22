@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { createRoot } from 'react-dom/client';
-import { DEFAULT_CENTER, DEFAULT_ZOOM, getThemeUrl } from '@/lib/constants';
-import { createCircleGeoJSON } from '@/lib/geo-utils';
-import { useAppStore } from '@/stores/app-store';
-import { useFilterStore } from '@/stores/filter-store';
-import { useStations } from '@/hooks/use-stations';
-import { StationMarker } from './station-marker';
-import { UserLocationMarker } from './user-location-marker';
-import type { GasStation } from '@/types/station';
-import type { Feature, Polygon } from 'geojson';
+import { useEffect, useRef, useCallback } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { createRoot } from "react-dom/client";
+import { DEFAULT_CENTER, DEFAULT_ZOOM, getThemeUrl } from "@/lib/constants";
+import { createCircleGeoJSON } from "@/lib/geo-utils";
+import { useAppStore } from "@/stores/app-store";
+import { useFilterStore } from "@/stores/filter-store";
+import { useStations } from "@/hooks/use-stations";
+import { StationMarker } from "./station-marker";
+import { UserLocationMarker } from "./user-location-marker";
+import type { GasStation } from "@/types/station";
+import type { Feature, Polygon } from "geojson";
 
-const RADIUS_SOURCE_ID = 'radius-circle';
-const RADIUS_FILL_LAYER = 'radius-circle-fill';
-const RADIUS_LINE_LAYER = 'radius-circle-line';
+const RADIUS_SOURCE_ID = "radius-circle";
+const RADIUS_FILL_LAYER = "radius-circle-fill";
+const RADIUS_LINE_LAYER = "radius-circle-line";
 
 export default function MapContainer() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -39,7 +39,7 @@ export default function MapContainer() {
     (station: GasStation) => {
       setSelectedStation(station.id);
     },
-    [setSelectedStation]
+    [setSelectedStation],
   );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
@@ -57,7 +57,7 @@ export default function MapContainer() {
       zoom: DEFAULT_ZOOM,
     });
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
 
     return () => {
@@ -88,7 +88,7 @@ export default function MapContainer() {
       return;
     }
 
-    const el = document.createElement('div');
+    const el = document.createElement("div");
     const root = createRoot(el);
     root.render(<UserLocationMarker />);
 
@@ -100,49 +100,55 @@ export default function MapContainer() {
   }, [location]);
 
   // Radius circle layer
-  const addRadiusCircle = useCallback((map: maplibregl.Map, lat: number, lng: number, radiusKm: number) => {
-    const geojson = createCircleGeoJSON(lat, lng, radiusKm);
+  const addRadiusCircle = useCallback(
+    (map: maplibregl.Map, lat: number, lng: number, radiusKm: number) => {
+      const geojson = createCircleGeoJSON(lat, lng, radiusKm);
 
-    if (map.getSource(RADIUS_SOURCE_ID)) {
-      (map.getSource(RADIUS_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geojson as Feature<Polygon>);
-    } else {
-      map.addSource(RADIUS_SOURCE_ID, {
-        type: 'geojson',
-        data: geojson as Feature<Polygon>,
-      });
-      map.addLayer({
-        id: RADIUS_FILL_LAYER,
-        type: 'fill',
-        source: RADIUS_SOURCE_ID,
-        paint: {
-          'fill-color': '#3b82f6',
-          'fill-opacity': 0.08,
-        },
-      });
-      map.addLayer({
-        id: RADIUS_LINE_LAYER,
-        type: 'line',
-        source: RADIUS_SOURCE_ID,
-        paint: {
-          'line-color': '#3b82f6',
-          'line-width': 1.5,
-          'line-opacity': 0.4,
-          'line-dasharray': [4, 4],
-        },
-      });
-    }
-  }, []);
+      if (map.getSource(RADIUS_SOURCE_ID)) {
+        (map.getSource(RADIUS_SOURCE_ID) as maplibregl.GeoJSONSource).setData(
+          geojson as Feature<Polygon>,
+        );
+      } else {
+        map.addSource(RADIUS_SOURCE_ID, {
+          type: "geojson",
+          data: geojson as Feature<Polygon>,
+        });
+        map.addLayer({
+          id: RADIUS_FILL_LAYER,
+          type: "fill",
+          source: RADIUS_SOURCE_ID,
+          paint: {
+            "fill-color": "#3b82f6",
+            "fill-opacity": 0.08,
+          },
+        });
+        map.addLayer({
+          id: RADIUS_LINE_LAYER,
+          type: "line",
+          source: RADIUS_SOURCE_ID,
+          paint: {
+            "line-color": "#3b82f6",
+            "line-width": 1.5,
+            "line-opacity": 0.4,
+            "line-dasharray": [4, 4],
+          },
+        });
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !location) return;
 
-    const update = () => addRadiusCircle(map, location.latitude, location.longitude, radius);
+    const update = () =>
+      addRadiusCircle(map, location.latitude, location.longitude, radius);
 
     if (map.isStyleLoaded()) {
       update();
     } else {
-      map.once('style.load', update);
+      map.once("style.load", update);
     }
   }, [location, radius, addRadiusCircle]);
 
@@ -157,29 +163,39 @@ export default function MapContainer() {
       }
     };
 
-    map.on('styledata', onStyleData);
-    return () => { map.off('styledata', onStyleData); };
+    map.on("styledata", onStyleData);
+    return () => {
+      map.off("styledata", onStyleData);
+    };
   }, [location, radius, addRadiusCircle]);
 
   // Route to selected station
   const routeAnimRef = useRef<number | null>(null);
+  const routeAbortedRef = useRef(false);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const ROUTE_SOURCE = 'route-to-station';
-    const ROUTE_GLOW = 'route-to-station-glow';
-    const ROUTE_BG = 'route-to-station-bg';
-    const ROUTE_LINE = 'route-to-station-line';
+    const ROUTE_SOURCE = "route-to-station";
+    const ROUTE_GLOW = "route-to-station-glow";
+    const ROUTE_BG = "route-to-station-bg";
+    const ROUTE_LINE = "route-to-station-line";
+
+    routeAbortedRef.current = false;
 
     const cleanup = () => {
+      routeAbortedRef.current = true;
       if (routeAnimRef.current) cancelAnimationFrame(routeAnimRef.current);
       routeAnimRef.current = null;
-      for (const id of [ROUTE_LINE, ROUTE_BG, ROUTE_GLOW]) {
-        if (map.getLayer(id)) map.removeLayer(id);
+      try {
+        for (const id of [ROUTE_LINE, ROUTE_BG, ROUTE_GLOW]) {
+          if (map.getLayer(id)) map.removeLayer(id);
+        }
+        if (map.getSource(ROUTE_SOURCE)) map.removeSource(ROUTE_SOURCE);
+      } catch {
+        /* map may be in an inconsistent state during style change */
       }
-      if (map.getSource(ROUTE_SOURCE)) map.removeSource(ROUTE_SOURCE);
     };
 
     if (!selectedStationId || !location || !stations) {
@@ -202,51 +218,75 @@ export default function MapContainer() {
     }
 
     const drawRoute = () => {
-      if (!map.getContainer()?.clientHeight) return;
+      if (routeAbortedRef.current || !map.getContainer()?.clientHeight) return;
       try {
         const bounds = new maplibregl.LngLatBounds();
         bounds.extend([location.longitude, location.latitude]);
         bounds.extend([station.longitude, station.latitude]);
-        map.fitBounds(bounds, { padding: { top: 80, bottom: 80, left: 80, right: 420 }, maxZoom: 14 });
-      } catch { /* map not ready */ }
+        map.fitBounds(bounds, {
+          padding: { top: 80, bottom: 80, left: 80, right: 420 },
+          maxZoom: 14,
+        });
+      } catch {
+        /* map not ready */
+      }
 
       const url = `https://router.project-osrm.org/route/v1/driving/${location.longitude},${location.latitude};${station.longitude},${station.latitude}?overview=full&geometries=geojson`;
 
       fetch(url)
         .then((res) => res.json())
         .then((data) => {
-          if (!data.routes?.[0] || !mapRef.current) return;
+          if (routeAbortedRef.current || !data.routes?.[0] || !mapRef.current)
+            return;
           cleanup();
+          routeAbortedRef.current = false;
 
-          const geojson = { type: 'Feature' as const, properties: {}, geometry: data.routes[0].geometry };
+          const geojson = {
+            type: "Feature" as const,
+            properties: {},
+            geometry: data.routes[0].geometry,
+          };
 
-          map.addSource(ROUTE_SOURCE, { type: 'geojson', data: geojson });
+          map.addSource(ROUTE_SOURCE, { type: "geojson", data: geojson });
 
           // Glow layer (wide, blurred effect)
           map.addLayer({
             id: ROUTE_GLOW,
-            type: 'line',
+            type: "line",
             source: ROUTE_SOURCE,
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#6366f1', 'line-width': 14, 'line-opacity': 0, 'line-blur': 12 },
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#6366f1",
+              "line-width": 14,
+              "line-opacity": 0,
+              "line-blur": 12,
+            },
           });
 
           // Background line (dark outline)
           map.addLayer({
             id: ROUTE_BG,
-            type: 'line',
+            type: "line",
             source: ROUTE_SOURCE,
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#312e81', 'line-width': 6, 'line-opacity': 0 },
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#312e81",
+              "line-width": 6,
+              "line-opacity": 0,
+            },
           });
 
           // Main route line with dash animation
           map.addLayer({
             id: ROUTE_LINE,
-            type: 'line',
+            type: "line",
             source: ROUTE_SOURCE,
-            layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#818cf8', 'line-width': 4, 'line-opacity': 0 },
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#818cf8",
+              "line-width": 4,
+              "line-opacity": 0,
+            },
           });
 
           // Animate: reveal route progressively
@@ -256,7 +296,12 @@ export default function MapContainer() {
           const startTime = performance.now();
 
           const animate = (now: number) => {
-            if (!mapRef.current) return;
+            if (
+              routeAbortedRef.current ||
+              !mapRef.current ||
+              !map.getLayer(ROUTE_LINE)
+            )
+              return;
             const elapsed = now - startTime;
             const progress = Math.min(elapsed / duration, 1);
             // Ease out cubic
@@ -265,34 +310,31 @@ export default function MapContainer() {
 
             const partialCoords = coords.slice(0, pointCount);
             const partialGeojson = {
-              type: 'Feature' as const,
+              type: "Feature" as const,
               properties: {},
-              geometry: { type: 'LineString' as const, coordinates: partialCoords },
+              geometry: {
+                type: "LineString" as const,
+                coordinates: partialCoords,
+              },
             };
 
-            (map.getSource(ROUTE_SOURCE) as maplibregl.GeoJSONSource)?.setData(partialGeojson);
+            try {
+              (
+                map.getSource(ROUTE_SOURCE) as maplibregl.GeoJSONSource
+              )?.setData(partialGeojson);
 
-            // Fade in layers
-            const opacity = Math.min(progress * 2, 1);
-            map.setPaintProperty(ROUTE_GLOW, 'line-opacity', opacity * 0.15);
-            map.setPaintProperty(ROUTE_BG, 'line-opacity', opacity * 0.6);
-            map.setPaintProperty(ROUTE_LINE, 'line-opacity', opacity * 0.9);
+              const opacity = Math.max(0, Math.min(progress * 2, 1));
+              map.setPaintProperty(ROUTE_GLOW, "line-opacity", opacity * 0.15);
+              map.setPaintProperty(ROUTE_BG, "line-opacity", opacity * 0.6);
+              map.setPaintProperty(ROUTE_LINE, "line-opacity", opacity * 0.9);
+            } catch {
+              return;
+            }
+
             if (progress < 1) {
               routeAnimRef.current = requestAnimationFrame(animate);
             } else {
-              // After animation: switch to full line, start dash animation
-              map.setPaintProperty(ROUTE_LINE, 'line-dasharray', [0, 4, 3]);
               routeAnimRef.current = null;
-
-              // Pulsing dash animation
-              let dashOffset = 0;
-              const animateDash = () => {
-                if (!mapRef.current || !map.getLayer(ROUTE_LINE)) return;
-                dashOffset = (dashOffset + 0.15) % 7;
-                map.setPaintProperty(ROUTE_LINE, 'line-dasharray', [dashOffset, 4, 3]);
-                routeAnimRef.current = requestAnimationFrame(animateDash);
-              };
-              routeAnimRef.current = requestAnimationFrame(animateDash);
             }
           };
 
@@ -304,7 +346,7 @@ export default function MapContainer() {
     if (map.isStyleLoaded()) {
       drawRoute();
     } else {
-      map.once('style.load', drawRoute);
+      map.once("style.load", drawRoute);
     }
 
     return cleanup;
@@ -327,7 +369,7 @@ export default function MapContainer() {
     if (!stations) return;
 
     stations.forEach((station) => {
-      const el = document.createElement('div');
+      const el = document.createElement("div");
       const root = createRoot(el);
       root.render(
         <StationMarker
@@ -335,18 +377,24 @@ export default function MapContainer() {
           fuelType={activeFuelType}
           scale={markerSize}
           isSelected={station.id === selectedStationId}
-        />
+        />,
       );
 
-      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
         .setLngLat([station.longitude, station.latitude])
         .addTo(mapRef.current!);
 
-      el.addEventListener('click', () => handleMarkerClick(station));
+      el.addEventListener("click", () => handleMarkerClick(station));
 
       markersRef.current.push(marker);
     });
-  }, [stations, selectedStationId, activeFuelType, markerSize, handleMarkerClick]);
+  }, [
+    stations,
+    selectedStationId,
+    activeFuelType,
+    markerSize,
+    handleMarkerClick,
+  ]);
 
   return (
     <div className="relative h-full w-full">
@@ -363,7 +411,8 @@ export default function MapContainer() {
               </>
             ) : (
               <span className="text-xs font-medium text-muted-foreground">
-                {stations!.length} station{stations!.length > 1 ? 's' : ''} trouvée{stations!.length > 1 ? 's' : ''}
+                {stations!.length} station{stations!.length > 1 ? "s" : ""}{" "}
+                trouvée{stations!.length > 1 ? "s" : ""}
               </span>
             )}
           </div>
