@@ -49,8 +49,8 @@
 ```bash
 git clone https://github.com/Zaphkiel-Ivanovna/via-plena.git
 cd via-plena
-npm install
-npm run dev
+yarn install
+yarn dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -59,11 +59,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 | Command | Description |
 |---------|------------|
-| `npm run dev` | Start the development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start the production server |
-| `npm run lint` | Lint code with ESLint |
-| `npm run api:generate` | Generate the API client with Orval |
+| `yarn dev` | Start the development server |
+| `yarn build` | Build for production |
+| `yarn start` | Start the production server |
+| `yarn lint` | Lint code with ESLint |
+| `yarn api:generate` | Generate the API client with Orval |
 
 ## Project Structure
 
@@ -92,7 +92,7 @@ Contributions are welcome! To contribute:
 
 ## License
 
-[MIT](LICENSE) © 2025 [Zaphkiel-Ivanovna](https://github.com/Zaphkiel-Ivanovna)
+[MIT](LICENSE) © 2026 [Zaphkiel-Ivanovna](https://github.com/Zaphkiel-Ivanovna)
 
 ---
 
