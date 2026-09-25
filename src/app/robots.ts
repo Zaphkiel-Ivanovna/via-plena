@@ -1,28 +1,14 @@
-import type { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next'
+import { SITE_URL } from '@/lib/site'
 
-const SITE_URL = 'https://via-plena.zaphkiel.dev';
+const AI_BOTS = ['GPTBot', 'OAI-SearchBot', 'ClaudeBot', 'Claude-SearchBot', 'PerplexityBot', 'Google-Extended']
 
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      {
-        userAgent: '*',
-        allow: '/',
-        disallow: '/api/',
-      },
-      {
-        userAgent: 'GPTBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'ClaudeBot',
-        allow: '/',
-      },
-      {
-        userAgent: 'PerplexityBot',
-        allow: '/',
-      },
+      { userAgent: '*', allow: '/', disallow: '/api/' },
+      ...AI_BOTS.map((userAgent) => ({ userAgent, allow: '/', disallow: '/api/' })),
     ],
-    sitemap: `${SITE_URL}/sitemap.xml`,
-  };
+    sitemap: `${SITE_URL}/sitemap-index.xml`,
+  }
 }

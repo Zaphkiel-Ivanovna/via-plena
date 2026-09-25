@@ -1,7 +1,8 @@
 import dynamic from 'next/dynamic';
 import { Fuel } from 'lucide-react';
+import type { Poi } from '@/lib/poi';
 
-const MapDynamic = dynamic(() => import('./map-container'), {
+const MapContainer = dynamic(() => import('./map-container'), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-black/90">
@@ -16,4 +17,6 @@ const MapDynamic = dynamic(() => import('./map-container'), {
   ),
 });
 
-export { MapDynamic };
+export function MapDynamic({ pois }: { pois: Poi[] }) {
+  return <MapContainer pois={pois} />;
+}

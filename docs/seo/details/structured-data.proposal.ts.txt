@@ -1,0 +1,556 @@
+/**
+ * Proposition : src/lib/structured-data.ts
+ * Builders JSON-LD Schema.org pour ViaPlena (serveur uniquement, pas de 'use client').
+ */
+import { FUEL_NAMES_ORDER } from '@/lib/constants'
+import { isEv, isGas, type EvStationData, type GasStationData, type Poi } from '@/lib/poi'
+import {
+  PLUG_LABELS,
+  chargingPoints,
+  evPayment,
+  evPricing,
+  formatMinutes,
+  formatPower,
+  isAlwaysOpenEv,
+  latestFuelUpdate,
+  parseGasSchedule,
+  temporaryOutages,
+  type DaySchedule,
+  type PlugKind,
+} from '@/lib/poi-details'
+
+export const SITE_URL = 'https://via-plena.zaphkiel.dev'
+export const SITE_NAME = 'ViaPlena'
+export const ORG_ID = `${SITE_URL}/#organization`
+export const WEBSITE_ID = `${SITE_URL}/#website`
+export const APP_ID = `${SITE_URL}/#webapp`
+
+type Json = Record<string, unknown>
+
+/** Sérialisation sûre pour <script type="application/ld+json">. */
+export const jsonLdHtml = (data: unknown) => ({
+  __html: JSON.stringify(data).replace(/</g, '\\u003c'),
+})
+
+const graph = (...nodes: (Json | null | undefined | false)[]) => ({
+  '@context': 'https://schema.org',
+  '@graph': nodes.filter(Boolean),
+})
+
+// ---------------------------------------------------------------------------
+// Site-wide (layout.tsx)
+// ---------------------------------------------------------------------------
+
+export const SITE_DESCRIPTION =
+  'Comparez les prix des carburants en temps réel autour de vous. Trouvez la station-service la moins chère : Gazole, SP95, SP98, E10, E85, GPL.'
+
+export function siteGraph() {
+  return graph(
+    {
+      '@type': 'WebSite',
+      '@id': WEBSITE_ID,
+      url: SITE_URL,
+      name: SITE_NAME,
+      alternateName: ['Via Plena', 'ViaPlena - Prix carburants et bornes de recharge'],
+      description: SITE_DESCRIPTION,
+      inLanguage: 'fr-FR',
+      publisher: { '@id': ORG_ID },
+      // Pas de SearchAction : sitelinks search box retiré par Google (nov. 2024)
+      // et aucune URL de recherche crawlable (/recherche?q=) n'existe.
+    },
+    {
+      '@type': 'Organization',
+      '@id': ORG_ID,
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: {
+        '@type': 'ImageObject',
+        '@id': `${SITE_URL}/#logo`,
+        url: `${SITE_URL}/logo.png`,
+        contentUrl: `${SITE_URL}/logo.png`,
+        width: 480,
+        height: 480,
+        caption: SITE_NAME,
+      },
+      image: { '@id': `${SITE_URL}/#logo` },
+      description:
+        'Comparateur indépendant des prix des carburants et des bornes de recharge en France, à partir des données ouvertes publiques.',
+      founder: { '@type': 'Person', name: 'Zaphkiel', url: 'https://github.com/Zaphkiel-Ivanovna' },
+      sameAs: ['https://github.com/Zaphkiel-Ivanovna'],
+      areaServed: { '@type': 'Country', name: 'France' },
+    },
+  )
+}
+
+/** Accueil uniquement (app/page.tsx). */
+export function homeGraph() {
+  return graph(
+    {
+      '@type': 'WebPage',
+      '@id': `${SITE_URL}/#webpage`,
+      url: SITE_URL,
+      name: `${SITE_NAME} - Trouvez les meilleurs prix de carburant`,
+      description: SITE_DESCRIPTION,
+      inLanguage: 'fr-FR',
+      isPartOf: { '@id': WEBSITE_ID },
+      about: { '@id': APP_ID },
+      mainEntity: { '@id': APP_ID },
+    },
+    {
+      '@type': 'WebApplication',
+      '@id': APP_ID,
+      name: SITE_NAME,
+      url: SITE_URL,
+      description:
+        'Carte interactive des stations-service et bornes de recharge en France : prix des carburants, horaires, services, disponibilité des points de charge et itinéraire.',
+      applicationCategory: 'TravelApplication',
+      operatingSystem: 'Web',
+      browserRequirements: 'Requires JavaScript. Requires WebGL.',
+      inLanguage: 'fr-FR',
+      isAccessibleForFree: true,
+      offers: { '@type': 'Offer', price: 0, priceCurrency: 'EUR' },
+      featureList: [
+        'Prix des carburants en temps réel (Gazole, SP95, SP98, E10, E85, GPLc)',
+        'Bornes de recharge et disponibilité des points de charge',
+        'Horaires et services des stations',
+        'Historique des prix',
+        'Itinéraire vers la station',
+      ],
+      publisher: { '@id': ORG_ID },
+      // PAS d'aggregateRating tant qu'il n'y a pas d'avis réels et visibles.
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Helpers POI
+// ---------------------------------------------------------------------------
+
+export const stationUrl = (p: Poi) => `${SITE_URL}/station/${p.id}`
+export const cleanName = (p: Poi) => p.name.split(' | ').slice(-1)[0]
+
+/** Retire "75004 Paris" / "France" déjà portés par postalCode/addressLocality. */
+export function streetAddress(p: Poi): string {
+  const escaped = p.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return p.address
+    .replace(/,?\s*France$/i, '')
+    .replace(new RegExp(`,?\\s*${p.postalCode}\\s*${escaped}\\s*$`, 'i'), '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/** Arrondissements (Paris/Lyon/Marseille) -> code de la commune, seul connu de /communes/:insee. */
+export function communeInsee(insee: string | null | undefined): string | null {
+  if (!insee) return null
+  if (/^751(0[1-9]|1\d|20)$/.test(insee)) return '75056'
+  if (/^6938[1-9]$/.test(insee)) return '69123'
+  if (/^132(0[1-9]|1[0-6])$/.test(insee)) return '13055'
+  return insee
+}
+
+const DAYS = [
+  'https://schema.org/Monday',
+  'https://schema.org/Tuesday',
+  'https://schema.org/Wednesday',
+  'https://schema.org/Thursday',
+  'https://schema.org/Friday',
+  'https://schema.org/Saturday',
+  'https://schema.org/Sunday',
+] as const
+
+const ALWAYS_OPEN = [{ '@type': 'OpeningHoursSpecification', dayOfWeek: [...DAYS], opens: '00:00', closes: '23:59' }]
+
+/** DaySchedule[] -> OpeningHoursSpecification[], jours aux horaires identiques regroupés. */
+export function openingHoursSpecification(week: DaySchedule[]): Json[] {
+  if (week.every((d) => d.allDay)) return ALWAYS_OPEN
+  const groups = new Map<string, { days: string[]; opens: string; closes: string }>()
+  for (const d of week) {
+    const slots = d.allDay
+      ? [{ opens: '00:00', closes: '23:59' }]
+      : d.closed
+        ? [{ opens: '00:00', closes: '00:00' }] // convention Google : fermé toute la journée
+        : d.ranges.map((r) => ({ opens: formatMinutes(r.start), closes: formatMinutes(r.end) }))
+    // closes < opens = passage de minuit (accepté par Google).
+    for (const s of slots) {
+      const key = `${s.opens}-${s.closes}`
+      const g = groups.get(key) ?? { days: [], ...s }
+      g.days.push(DAYS[d.index])
+      groups.set(key, g)
+    }
+  }
+  return [...groups.values()].map((g) => ({
+    '@type': 'OpeningHoursSpecification',
+    dayOfWeek: g.days.length === 1 ? g.days[0] : g.days,
+    opens: g.opens,
+    closes: g.closes,
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// Station essence
+// ---------------------------------------------------------------------------
+
+/** Libellés FR affichés sur la page (et non "Diesel"). */
+const FUEL_LD: Record<string, { name: string; alternateName: string }> = {
+  Gazole: { name: 'Gazole', alternateName: 'B7' },
+  SP95: { name: 'Sans Plomb 95', alternateName: 'E5' },
+  SP98: { name: 'Sans Plomb 98', alternateName: 'E5' },
+  E10: { name: 'Sans Plomb 95-E10', alternateName: 'E10' },
+  E85: { name: 'Superéthanol E85', alternateName: 'E85' },
+  GPLc: { name: 'GPL carburant', alternateName: 'LPG' },
+}
+
+const fuelProduct = (code: string) => ({
+  '@type': 'Product',
+  name: FUEL_LD[code]?.name ?? code,
+  alternateName: FUEL_LD[code]?.alternateName,
+  category: 'Carburant',
+})
+
+function fuelOffers(data: GasStationData): Json[] {
+  const order = (n: string) => FUEL_NAMES_ORDER.indexOf(n as never)
+  const priced = data.fuels
+    .filter((f): f is typeof f & { price: number } => f.price != null)
+    .sort((a, b) => order(a.name) - order(b.name))
+  const offers: Json[] = priced.map((f) => ({
+    '@type': 'Offer',
+    name: FUEL_LD[f.name]?.name ?? f.name,
+    price: f.price,
+    priceCurrency: 'EUR',
+    priceSpecification: {
+      '@type': 'UnitPriceSpecification',
+      price: f.price,
+      priceCurrency: 'EUR',
+      unitCode: 'LTR',
+      unitText: 'L',
+      referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'LTR' },
+      valueAddedTaxIncluded: true,
+      ...(f.lastUpdate && { validFrom: f.lastUpdate }),
+    },
+    availability: 'https://schema.org/InStock',
+    ...(f.lastUpdate && { validFrom: f.lastUpdate }),
+    itemOffered: fuelProduct(f.name),
+  }))
+  // Ruptures temporaires : utiles et visibles sur la page. Les définitives = "non vendu" -> omises.
+  for (const o of temporaryOutages(data)) {
+    offers.push({
+      '@type': 'Offer',
+      name: FUEL_LD[o.name]?.name ?? o.name,
+      availability: 'https://schema.org/OutOfStock',
+      ...(o.since && { availabilityStarts: o.since }),
+      itemOffered: fuelProduct(o.name),
+    })
+  }
+  return offers
+}
+
+/** Services bruts du flux (libellés FR) -> amenityFeature. */
+function serviceFeatures(services: string[]): Json[] {
+  return [...new Set(services.map((s) => s.trim()).filter(Boolean))].map((s) => ({
+    '@type': 'LocationFeatureSpecification',
+    name: s,
+    value: true,
+  }))
+}
+
+const paymentFromServices = (services: string[]) =>
+  services.some((s) => /automate|cb/i.test(s)) ? 'Carte bancaire, Espèces' : undefined
+
+// ---------------------------------------------------------------------------
+// Borne de recharge
+// ---------------------------------------------------------------------------
+
+const PLUG_FLAGS: [PlugKind, (cp: ReturnType<typeof chargingPoints>[number]) => boolean][] = [
+  ['ccs', (cp) => cp.hasPlugTypeComboCcs],
+  ['chademo', (cp) => cp.hasPlugTypeChademo],
+  ['type2', (cp) => cp.hasPlugType2],
+  ['ef', (cp) => cp.hasPlugTypeEf],
+  ['other', (cp) => cp.hasPlugTypeOther],
+]
+
+const toE164 = (raw: string) => {
+  const d = raw.replace(/^tel:/i, '').replace(/[^\d+]/g, '')
+  if (/^0\d{9}$/.test(d)) return `+33${d.slice(1)}`
+  return /^\+\d{8,15}$/.test(d) ? d : undefined
+}
+
+const isUnknown = (v: string | null | undefined) => !v || /^(inconnu|accessibilité inconnue|aucun)$/i.test(v.trim())
+
+function evFeatures(data: EvStationData): Json[] {
+  const points = chargingPoints(data)
+  const count = data.chargingPointCount || points.length
+  const maxPower = points.reduce((m, cp) => Math.max(m, cp.nominalPower), 0)
+  const feat = (name: string, value: unknown, extra: Json = {}) => ({
+    '@type': 'LocationFeatureSpecification',
+    name,
+    value,
+    ...extra,
+  })
+  const out: Json[] = [feat('Points de charge', count)]
+  if (maxPower) out.push(feat('Puissance maximale', maxPower, { unitCode: 'KWT', unitText: 'kW' }))
+  for (const [kind, has] of PLUG_FLAGS) {
+    const n = points.filter(has).length
+    if (n) out.push(feat(`Prise ${PLUG_LABELS[kind]}`, n, { unitText: 'points de charge' }))
+  }
+  out.push(feat('Réservation possible', data.hasReservation))
+  if (!isUnknown(data.stationType)) out.push(feat('Type d’implantation', data.stationType))
+  if (!isUnknown(data.pmrAccessibility)) out.push(feat('Accessibilité PMR', data.pmrAccessibility))
+  if (data.isTwoWheelerStation) out.push(feat('Réservée aux deux-roues', true))
+  if (points.some((cp) => cp.hasCableT2Attached)) out.push(feat('Câble Type 2 attaché', true))
+  return out
+}
+
+function evOffers(data: EvStationData): Json[] | undefined {
+  const points = chargingPoints(data)
+  const pay = evPayment(points)
+  const pricing = evPricing(points)
+  if (pay.free) return [{ '@type': 'Offer', name: 'Recharge', price: 0, priceCurrency: 'EUR' }]
+  if (!pricing) return undefined
+  return [
+    {
+      '@type': 'Offer',
+      name: 'Recharge',
+      ...(pricing.kind === 'link' ? { url: pricing.url } : { description: pricing.text }),
+      itemOffered: { '@type': 'Service', name: 'Recharge de véhicule électrique' },
+    },
+  ]
+}
+
+// ---------------------------------------------------------------------------
+// Fiche station (app/station/[id]/page.tsx)
+// ---------------------------------------------------------------------------
+
+export function stationGraph(p: Poi, opts: { imageUrl?: string } = {}) {
+  const url = stationUrl(p)
+  const name = cleanName(p)
+  const stationId = `${url}#station`
+  const insee = isEv(p) ? communeInsee(p.data.inseeCode) : null
+
+  const address = {
+    '@type': 'PostalAddress',
+    streetAddress: streetAddress(p),
+    addressLocality: p.city,
+    postalCode: p.postalCode,
+    addressRegion: p.region,
+    addressCountry: 'FR',
+  }
+  const base: Json = {
+    '@id': stationId,
+    name,
+    url,
+    ...(opts.imageUrl && { image: opts.imageUrl }), // jamais le logo générique du site
+    address,
+    geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng },
+    hasMap: `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`,
+    ...(insee && { containedInPlace: { '@id': `${SITE_URL}/commune/${insee}#place` } }),
+  }
+
+  let station: Json
+  let dateModified: string | undefined
+
+  if (isGas(p)) {
+    const week = parseGasSchedule(p.data)
+    const services = p.data.services ?? []
+    const offers = fuelOffers(p.data)
+    dateModified = latestFuelUpdate(p.data)?.toISOString()
+    station = {
+      '@type': 'GasStation',
+      ...base,
+      ...(p.data.brand && { brand: { '@type': 'Brand', name: p.data.brand } }),
+      ...(week && { openingHoursSpecification: openingHoursSpecification(week) }),
+      ...(services.length > 0 && { amenityFeature: serviceFeatures(services) }),
+      ...(paymentFromServices(services) && { paymentAccepted: paymentFromServices(services) }),
+      currenciesAccepted: 'EUR',
+      ...(offers.length > 0 && { makesOffer: offers }),
+    }
+  } else if (isEv(p)) {
+    const d = p.data
+    const points = chargingPoints(d)
+    const pay = evPayment(points)
+    const maxPower = points.reduce((m, cp) => Math.max(m, cp.nominalPower), 0)
+    const count = d.chargingPointCount || points.length
+    const phone = toE164(d.operatorPhone ?? '')
+    const payment = [pay.creditCard && 'Carte bancaire', pay.payPerUse && 'Paiement à l’acte', pay.other && 'Badge / application']
+      .filter(Boolean)
+      .join(', ')
+    const offers = evOffers(d)
+    dateModified = d.lastModified ?? undefined
+    station = {
+      // Aucun type EV dans schema.org (ni core ni pending) : AutomotiveBusiness + additionalType Wikidata.
+      '@type': 'AutomotiveBusiness',
+      additionalType: 'https://www.wikidata.org/wiki/Q2140665', // "charging station" - à vérifier
+      ...base,
+      description: `Borne de recharge : ${count} point${count > 1 ? 's' : ''} de charge${maxPower ? `, jusqu’à ${formatPower(maxPower)}` : ''}.`,
+      ...((d.brandName || d.operatorName) && { brand: { '@type': 'Brand', name: d.brandName || d.operatorName } }),
+      ...(d.operatorName && {
+        parentOrganization: {
+          '@type': 'Organization',
+          name: d.operatorName,
+          ...(d.operatorContact?.includes('@') && { email: d.operatorContact }),
+          ...(phone && { telephone: phone }),
+        },
+      }),
+      ...(phone && { telephone: phone }),
+      ...(isAlwaysOpenEv(d) && { openingHoursSpecification: ALWAYS_OPEN }),
+      publicAccess: /libre/i.test(d.accessCondition ?? ''),
+      ...(pay.free && { isAccessibleForFree: true }),
+      ...(payment && { paymentAccepted: payment }),
+      amenityFeature: evFeatures(d),
+      ...(offers && { makesOffer: offers }),
+      ...(d.stationItineranceId && {
+        identifier: { '@type': 'PropertyValue', propertyID: 'id_station_itinerance', value: d.stationItineranceId },
+      }),
+    }
+  } else {
+    station = { '@type': 'Place', ...base }
+  }
+
+  const crumbs = [
+    { name: 'Accueil', item: SITE_URL },
+    ...(insee ? [{ name: p.city, item: `${SITE_URL}/commune/${insee}` }] : []),
+    { name, item: url },
+  ]
+
+  return graph(
+    {
+      '@type': 'WebPage',
+      '@id': `${url}#webpage`,
+      url,
+      name,
+      inLanguage: 'fr-FR',
+      isPartOf: { '@id': WEBSITE_ID },
+      mainEntity: { '@id': stationId },
+      about: { '@id': stationId },
+      breadcrumb: { '@id': `${url}#breadcrumb` },
+      ...(dateModified && { dateModified }),
+      ...(opts.imageUrl && { primaryImageOfPage: { '@type': 'ImageObject', url: opts.imageUrl } }),
+    },
+    station,
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${url}#breadcrumb`,
+      itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.item })),
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page commune (app/commune/[insee]/page.tsx, à rendre côté serveur)
+// ---------------------------------------------------------------------------
+
+export interface CommuneLd {
+  insee: string
+  name: string
+  postalCode: string
+  departmentCode: string
+  departmentName: string
+  regionCode: string
+  regionName: string
+}
+
+export function communeGraph(c: CommuneLd, pois: Poi[], opts: { total?: number } = {}) {
+  const url = `${SITE_URL}/commune/${c.insee}`
+  return graph(
+    {
+      '@type': 'CollectionPage',
+      '@id': `${url}#webpage`,
+      url,
+      name: `Stations-service et bornes de recharge à ${c.name}`,
+      inLanguage: 'fr-FR',
+      isPartOf: { '@id': WEBSITE_ID },
+      about: { '@id': `${url}#place` },
+      mainEntity: { '@id': `${url}#list` },
+      breadcrumb: { '@id': `${url}#breadcrumb` },
+    },
+    {
+      '@type': 'City',
+      '@id': `${url}#place`,
+      name: c.name,
+      identifier: { '@type': 'PropertyValue', propertyID: 'INSEE', value: c.insee },
+      address: { '@type': 'PostalAddress', addressLocality: c.name, postalCode: c.postalCode, addressRegion: c.regionName, addressCountry: 'FR' },
+      containedInPlace: {
+        '@type': 'AdministrativeArea',
+        name: c.departmentName,
+        identifier: c.departmentCode,
+        containedInPlace: { '@type': 'AdministrativeArea', name: c.regionName, identifier: c.regionCode },
+      },
+    },
+    {
+      '@type': 'ItemList',
+      '@id': `${url}#list`,
+      name: `Stations et bornes à ${c.name}`,
+      itemListOrder: 'https://schema.org/ItemListUnordered',
+      numberOfItems: opts.total ?? pois.length,
+      itemListElement: pois.map((p, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        // Forme "summary page" : l'URL suffit, la fiche porte le détail (évite les doublons).
+        url: stationUrl(p),
+        name: cleanName(p),
+      })),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      '@id': `${url}#breadcrumb`,
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Accueil', item: SITE_URL },
+        { '@type': 'ListItem', position: 2, name: c.name, item: url },
+      ],
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page stats (app/stats/page.tsx, à rendre côté serveur)
+// ---------------------------------------------------------------------------
+
+export interface CoverageLd {
+  totals: { evStations: number; gasStations: number; poiPrices: number; communes: number }
+}
+
+export function statsGraph(stats: CoverageLd, opts: { dateModified: string; apiDocUrl?: string }) {
+  const url = `${SITE_URL}/stats`
+  return graph(
+    {
+      '@type': 'WebPage',
+      '@id': `${url}#webpage`,
+      url,
+      name: 'Couverture des données ViaPlena',
+      inLanguage: 'fr-FR',
+      isPartOf: { '@id': WEBSITE_ID },
+      mainEntity: { '@id': `${url}#dataset` },
+      dateModified: opts.dateModified,
+    },
+    {
+      '@type': 'Dataset',
+      '@id': `${url}#dataset`,
+      name: 'Stations-service, prix des carburants et bornes de recharge en France (ViaPlena)',
+      description: `Jeu de données consolidé par ViaPlena : ${stats.totals.gasStations.toLocaleString('fr-FR')} stations-service avec leurs prix de carburants, ${stats.totals.evStations.toLocaleString('fr-FR')} stations de recharge pour véhicules électriques et ${stats.totals.poiPrices.toLocaleString('fr-FR')} observations de prix, couvrant ${stats.totals.communes.toLocaleString('fr-FR')} communes françaises. Construit à partir des données ouvertes publiques (flux prix des carburants du ministère de l’Économie, fichier consolidé IRVE).`,
+      url,
+      inLanguage: 'fr-FR',
+      keywords: ['prix carburant', 'station-service', 'borne de recharge', 'IRVE', 'France', 'open data'],
+      creator: { '@id': ORG_ID },
+      publisher: { '@id': ORG_ID },
+      license: 'https://www.etalab.gouv.fr/licence-ouverte-open-licence/',
+      isAccessibleForFree: true,
+      isBasedOn: [
+        'https://www.data.gouv.fr/fr/datasets/prix-des-carburants-en-france-flux-instantane-v2/',
+        'https://www.data.gouv.fr/fr/datasets/fichier-consolide-des-bornes-de-recharge-pour-vehicules-electriques/',
+      ],
+      spatialCoverage: { '@type': 'Place', name: 'France', address: { '@type': 'PostalAddress', addressCountry: 'FR' } },
+      dateModified: opts.dateModified,
+      variableMeasured: [
+        { '@type': 'PropertyValue', name: 'Prix du carburant', unitText: 'EUR/L' },
+        { '@type': 'PropertyValue', name: 'Puissance nominale du point de charge', unitCode: 'KWT' },
+        { '@type': 'PropertyValue', name: 'Disponibilité des points de charge' },
+      ],
+      ...(opts.apiDocUrl && {
+        distribution: {
+          '@type': 'DataDownload',
+          encodingFormat: 'application/json',
+          contentUrl: opts.apiDocUrl,
+        },
+      }),
+    },
+  )
+}

@@ -1,24 +1,38 @@
-import type { FuelType, StationService } from '@/types/station';
+export const FUEL_LABELS: Record<string, string> = {
+  Gazole: 'B7',
+  SP95: 'E5',
+  SP98: 'E5+',
+  E10: 'E10',
+  E85: 'E85',
+  GPLc: 'LPG',
+}
 
-export const FUEL_LABELS: Record<FuelType, string> = {
-  gazole: 'B7',
-  sp95: 'E5',
-  sp98: 'E5+',
-  e10: 'E10',
-  e85: 'E85',
-  gplc: 'LPG',
-};
+export const FUEL_NAMES: Record<string, string> = {
+  Gazole: 'Diesel',
+  SP95: 'Sans Plomb 95',
+  SP98: 'Sans Plomb 98',
+  E10: 'Sans Plomb 95-E10',
+  E85: 'Superéthanol',
+  GPLc: 'GPL carburant',
+}
 
-export const FUEL_NAMES: Record<FuelType, string> = {
-  gazole: 'Diesel',
-  sp95: 'Sans Plomb 95',
-  sp98: 'Sans Plomb 98',
-  e10: 'Sans Plomb 95-E10',
-  e85: 'Superéthanol',
-  gplc: 'GPL carburant',
-};
+export const FUEL_NAMES_ORDER = ['Gazole', 'SP95', 'SP98', 'E10', 'E85', 'GPLc'] as const
+export type FuelName = (typeof FUEL_NAMES_ORDER)[number]
 
-export const SERVICE_LABELS: Record<StationService, string> = {
+export const fuelLabel = (name: string): string => FUEL_LABELS[name] ?? name
+
+const FUEL_SEARCH_NAMES: Record<string, string> = {
+  Gazole: 'Gazole',
+  SP95: 'SP95',
+  SP98: 'SP98',
+  E10: 'SP95-E10',
+  E85: 'E85',
+  GPLc: 'GPL',
+}
+export const fuelSearchName = (name: string): string => FUEL_SEARCH_NAMES[name] ?? name
+export const fuelFullName = (name: string): string => FUEL_NAMES[name] ?? name
+
+export const SERVICE_LABELS: Record<string, string> = {
   lavage: 'Lavage',
   boutique: 'Boutique',
   gonflage: 'Gonflage',
@@ -31,19 +45,19 @@ export const SERVICE_LABELS: Record<StationService, string> = {
   aire_de_camping_car: 'Aire camping-car',
   gaz_domestique: 'Gaz domestique',
   bornes_electriques: 'Bornes electriques',
-};
+}
 
 export interface MapTheme {
-  id: string;
-  label: string;
-  url: string;
-  preview: string;
+  id: string
+  label: string
+  url: string
+  preview: string
 }
 
 export interface MapThemeCategory {
-  label: string;
-  dark: boolean;
-  themes: MapTheme[];
+  label: string
+  dark: boolean
+  themes: MapTheme[]
 }
 
 export const MAP_THEME_CATEGORIES: MapThemeCategory[] = [
@@ -161,30 +175,28 @@ export const MAP_THEME_CATEGORIES: MapThemeCategory[] = [
       },
     ],
   },
-];
+]
 
-export const ALL_MAP_THEMES = MAP_THEME_CATEGORIES.flatMap((c) => c.themes);
+export const ALL_MAP_THEMES = MAP_THEME_CATEGORIES.flatMap((c) => c.themes)
 
 export function isMapThemeDark(themeId: string): boolean {
-  return MAP_THEME_CATEGORIES.some(
-    (cat) => cat.dark && cat.themes.some((t) => t.id === themeId)
-  );
+  return MAP_THEME_CATEGORIES.some((cat) => cat.dark && cat.themes.some((t) => t.id === themeId))
 }
 
-export const DEFAULT_MAP_THEME = 'dark-matter';
+export const DEFAULT_MAP_THEME = 'dark-matter'
 
-export const TILE_STYLE_URL = ALL_MAP_THEMES[0].url;
+export const TILE_STYLE_URL = ALL_MAP_THEMES[0].url
 
 export const DEFAULT_CENTER = {
   latitude: 48.8566,
   longitude: 2.3522,
-};
+}
 
-export const DEFAULT_ZOOM = 12;
+export const DEFAULT_ZOOM = 12
 
-export const RADIUS_OPTIONS = [1, 2, 5, 10];
+export const RADIUS_OPTIONS = [1, 2, 5, 10]
 
-export const SERVICE_ICONS: Record<StationService, string> = {
+export const SERVICE_ICONS: Record<string, string> = {
   lavage: '\u{1F6BF}',
   boutique: '\u{1F6CD}\uFE0F',
   gonflage: '\u{1F6DE}',
@@ -197,8 +209,8 @@ export const SERVICE_ICONS: Record<StationService, string> = {
   aire_de_camping_car: '\u{1F6D0}',
   gaz_domestique: '\u{1F525}',
   bornes_electriques: '\u26A1',
-};
+}
 
 export function getThemeUrl(themeId: string): string {
-  return ALL_MAP_THEMES.find((t) => t.id === themeId)?.url ?? ALL_MAP_THEMES[0].url;
+  return ALL_MAP_THEMES.find((t) => t.id === themeId)?.url ?? ALL_MAP_THEMES[0].url
 }

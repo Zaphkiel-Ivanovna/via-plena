@@ -1,199 +1,249 @@
 'use client';
 
+import { type ComponentType, type ReactNode } from 'react';
+import Link from 'next/link';
 import {
   Sheet,
   SheetContent,
-  SheetHeader,
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+  DrawerDescription,
+} from '@/components/ui/drawer';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useStationDetail } from '@/hooks/use-station-detail';
+import { useGetPoiById } from '@/api/generated/poi/poi';
 import { useIsMobile } from '@/hooks/use-media-query';
-import { formatDistance, formatPrice, formatDate } from '@/lib/format';
-import { getCheapestPrice, getGoogleMapsUrl, getWazeUrl, getAppleMapsUrl } from '@/lib/station-utils';
-import { FUEL_LABELS, SERVICE_LABELS, SERVICE_ICONS } from '@/lib/constants';
+import { formatDistanceMeters } from '@/lib/format';
+import { distanceMeters, isEv, isGas, type Poi } from '@/lib/poi';
 import { BrandIcon } from './brand-icon';
-import { MapPin, Navigation, Clock, Share2 } from 'lucide-react';
-import { SiGooglemaps, SiWaze, SiApple } from '@icons-pack/react-simple-icons';
+import {
+  ActionBar,
+  AddressBlock,
+  EvSections,
+  EvSummaryPills,
+  GasSections,
+  IconAction,
+  Pill,
+  StatusPill,
+  displayName,
+  gasStatus,
+  useLiveCharging,
+  useNow,
+  type LiveCharging,
+} from './poi-sections';
+import {
+  CreditCard,
+  Maximize2,
+  SearchX,
+  X,
+  Zap,
+} from 'lucide-react';
+
+type TitleComponents = {
+  Title: ComponentType<{ className?: string; children: ReactNode }>;
+  Description: ComponentType<{ className?: string; children: ReactNode }>;
+};
+
+const SHEET_TITLES: TitleComponents = { Title: SheetTitle, Description: SheetDescription };
+const DRAWER_TITLES: TitleComponents = { Title: DrawerTitle, Description: DrawerDescription };
 
 export function StationDetail() {
-  const selectedStationId = useAppStore((s) => s.selectedStationId);
-  const setSelectedStation = useAppStore((s) => s.setSelectedStation);
+  const selectedPoiId = useAppStore((s) => s.selectedPoiId);
+  const setSelectedPoi = useAppStore((s) => s.setSelectedPoi);
   const isMobile = useIsMobile();
-  const { data: station } = useStationDetail(selectedStationId);
+  const { data: response, isError } = useGetPoiById(selectedPoiId ?? '', {
+    query: { enabled: selectedPoiId !== null },
+  });
+  const poi = response?.status === 200 ? (response.data as Poi) : undefined;
+  const notFound = isError || (response != null && response.status !== 200);
 
-  const cheapestPrice = station ? getCheapestPrice(station) : null;
+  const open = selectedPoiId !== null;
+  const close = () => setSelectedPoi(null);
+
+  const body = (titles: TitleComponents) => (
+    <PanelSurface>
+      {poi ? (
+        <PoiBody key={poi.id} poi={poi} titles={titles} onClose={close} />
+      ) : notFound ? (
+        <NotFound titles={titles} onClose={close} />
+      ) : (
+        <LoadingBody titles={titles} />
+      )}
+    </PanelSurface>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={(o) => !o && close()} modal={false}>
+        <DrawerContent className="border-0 bg-transparent p-0 outline-none data-[vaul-drawer-direction=bottom]:inset-x-2 data-[vaul-drawer-direction=bottom]:bottom-2 data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-[85dvh] data-[vaul-drawer-direction=bottom]:rounded-3xl data-[vaul-drawer-direction=bottom]:border-0 [&>div:first-child]:hidden">
+          {body(DRAWER_TITLES)}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
 
   return (
-    <Sheet
-      open={selectedStationId !== null}
-      onOpenChange={(open) => {
-        if (!open) setSelectedStation(null);
-      }}
-      modal={false}
-    >
+    <Sheet open={open} onOpenChange={(o) => !o && close()} modal={false}>
       <SheetContent
-        side={isMobile ? 'bottom' : 'right'}
+        side="right"
+        showCloseButton={false}
         overlayClassName="bg-transparent pointer-events-none"
         onInteractOutside={(e) => e.preventDefault()}
-        className={cn(
-          'border-0 overflow-hidden p-0',
-          isMobile
-            ? 'max-h-[85vh] rounded-3xl mx-2 mb-2 inset-x-2 bottom-2'
-            : 'sm:max-w-md h-auto top-3 bottom-3 right-3 rounded-3xl'
-        )}
+        className="top-3 right-3 bottom-3 h-auto gap-0 overflow-hidden rounded-3xl border-0 bg-transparent p-0 outline-none sm:max-w-md"
       >
-        {station ? (
-          <div className="flex flex-col overflow-hidden h-full rounded-3xl border border-border/50 bg-background/70 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/30 dark:border-white/[0.08]">
-                        <div className="p-6 pb-4 space-y-3">
-              <SheetHeader className="p-0 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <SheetTitle className="text-xl font-bold">{station.name}</SheetTitle>
-                    <SheetDescription asChild>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary border border-primary/20">
-                          <BrandIcon brand={station.brand} size={12} />
-                          {station.brand}
-                        </span>
-                        {station.distance !== undefined && (
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistance(station.distance)}
-                          </span>
-                        )}
-                      </div>
-                    </SheetDescription>
-                  </div>
-                </div>
-              </SheetHeader>
-              <div className="flex items-start gap-2 rounded-xl bg-muted/50 border border-border/50 p-3 shadow-sm dark:shadow-none dark:bg-white/[0.04] dark:border-white/[0.06]">
-                <MapPin className="mt-0.5 size-4 shrink-0 text-primary/70" />
-                <p className="text-sm">{station.address}, {station.postalCode} {station.city}</p>
-              </div>
-            </div>
-
-            <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
-
-                        <div className="overflow-y-auto flex-1">
-                            <div className="p-6 space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <span className="inline-block size-2 rounded-full bg-emerald-500" />
-                  Prix des carburants
-                </h4>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {station.fuels.map((fuel) => (
-                    <div
-                      key={fuel.type}
-                      className={cn(
-                        'flex items-center justify-between rounded-xl border p-3.5 transition-colors',
-                        cheapestPrice !== null && fuel.price === cheapestPrice
-                          ? 'border-emerald-500/30 bg-emerald-500/10 shadow-sm shadow-emerald-500/10'
-                          : 'border-border/50 bg-muted/30 shadow-sm dark:shadow-none dark:border-white/[0.06] dark:bg-white/[0.03]'
-                      )}
-                    >
-                      <span className="text-sm font-medium">{FUEL_LABELS[fuel.type]}</span>
-                      <span className="font-semibold tabular-nums">{formatPrice(fuel.price)}</span>
-                    </div>
-                  ))}
-                </div>
-                {station.fuels[0] && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Clock className="size-3" />
-                    Mis à jour le {formatDate(station.fuels[0].updatedAt)}
-                  </p>
-                )}
-              </div>
-
-              <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
-
-                            <div className="p-6 space-y-3">
-                <h4 className="text-sm font-semibold">Services</h4>
-                {station.services.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {station.services.map((service) => (
-                      <div
-                        key={service}
-                        className="flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 p-2.5 text-sm shadow-sm dark:shadow-none dark:border-white/[0.06] dark:bg-white/[0.03]"
-                      >
-                        <span className="text-base">{SERVICE_ICONS[service]}</span>
-                        <span className="text-xs text-muted-foreground">{SERVICE_LABELS[service]}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Aucun service disponible</p>
-                )}
-              </div>
-
-              <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
-
-                            <div className="p-6 space-y-2">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Navigation className="size-3.5" />
-                  Itinéraire
-                </h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <a
-                    href={getGoogleMapsUrl(station)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 rounded-2xl bg-primary px-3 py-3 text-xs font-medium text-primary-foreground shadow-md shadow-primary/25 transition-all hover:opacity-90"
-                  >
-                    <SiGooglemaps size={14} />
-                    Maps
-                  </a>
-                  <a
-                    href={getWazeUrl(station)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/50 bg-muted/30 px-3 py-3 text-xs font-medium shadow-sm transition-all hover:bg-muted/50 dark:shadow-none dark:border-white/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
-                  >
-                    <SiWaze size={14} />
-                    Waze
-                  </a>
-                  <a
-                    href={getAppleMapsUrl(station)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 rounded-2xl border border-border/50 bg-muted/30 px-3 py-3 text-xs font-medium shadow-sm transition-all hover:bg-muted/50 dark:shadow-none dark:border-white/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
-                  >
-                    <SiApple size={14} />
-                    Plans
-                  </a>
-                </div>
-              </div>
-
-              <div className="h-px bg-border/50 dark:bg-white/[0.06]" />
-
-                            <div className="p-6">
-                <button
-                  onClick={() => {
-                    const url = `${window.location.origin}/station/${station.id}`;
-                    if (navigator.share) {
-                      navigator.share({ title: station.name, url });
-                    } else {
-                      navigator.clipboard.writeText(url);
-                    }
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium shadow-sm transition-all hover:bg-muted/50 dark:shadow-none dark:border-white/[0.08] dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
-                >
-                  <Share2 className="size-4" />
-                  Partager cette station
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-3xl border border-border/50 bg-background/70 backdrop-blur-xl shadow-xl shadow-black/5 dark:shadow-black/30 dark:border-white/[0.08] p-6">
-            <SheetHeader>
-              <SheetTitle>Chargement...</SheetTitle>
-              <SheetDescription />
-            </SheetHeader>
-          </div>
-        )}
+        {body(SHEET_TITLES)}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function PanelSurface({ children }: { children: ReactNode }) {
+  return (
+    <div className="island-panel flex h-full max-h-[inherit] flex-col overflow-hidden rounded-3xl backdrop-blur-2xl backdrop-saturate-[180%]">
+      {children}
+    </div>
+  );
+}
+
+function LoadingBody({ titles: { Title, Description } }: { titles: TitleComponents }) {
+  return (
+    <div className="flex flex-col" aria-busy>
+      <Title className="sr-only">Chargement de la station</Title>
+      <Description className="sr-only">Les informations de la station sont en cours de chargement.</Description>
+      <DragHandle />
+      <div className="flex items-start gap-3 p-5 pb-4">
+        <Skeleton className="size-11 shrink-0 rounded-2xl" />
+        <div className="flex-1 space-y-2 pt-0.5">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
+      <div className="flex gap-2 px-5">
+        <Skeleton className="h-6 w-28 rounded-full" />
+        <Skeleton className="h-6 w-20 rounded-full" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-5">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-[72px] rounded-2xl" />
+        ))}
+      </div>
+      <div className="flex gap-2 border-t border-[var(--island-separator-bg)] p-4">
+        <Skeleton className="h-11 flex-1 rounded-2xl" />
+        <Skeleton className="size-11 rounded-2xl" />
+        <Skeleton className="size-11 rounded-2xl" />
+      </div>
+    </div>
+  );
+}
+
+function NotFound({ titles: { Title, Description }, onClose }: { titles: TitleComponents; onClose: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 pt-8 pb-6 text-center">
+      <DragHandle />
+      <div className="island-subtle flex size-12 items-center justify-center rounded-2xl">
+        <SearchX className="size-5 text-muted-foreground" aria-hidden />
+      </div>
+      <Title className="text-base font-semibold">Station introuvable</Title>
+      <Description className="max-w-[32ch] text-sm text-muted-foreground">
+        Elle n&apos;est plus référencée dans les données publiques, ou le lien est incorrect.
+      </Description>
+      <Button variant="outline" className="mt-2 rounded-2xl" onClick={onClose}>
+        Fermer
+      </Button>
+    </div>
+  );
+}
+
+function DragHandle() {
+  return <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/25 md:hidden" aria-hidden />;
+}
+
+function PoiBody({ poi, titles, onClose }: { poi: Poi; titles: TitleComponents; onClose: () => void }) {
+  const now = useNow();
+  const charging = useLiveCharging(poi);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col animate-in fade-in-0 slide-in-from-bottom-2 duration-300 motion-reduce:animate-none">
+      <DragHandle />
+      <PoiHeader poi={poi} titles={titles} onClose={onClose} now={now} charging={charging} />
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5" data-vaul-no-drag>
+        <div className="space-y-6">
+          {isGas(poi) && <GasSections data={poi.data} now={now} />}
+          {isEv(poi) && charging && <EvSections data={poi.data} charging={charging} now={now} />}
+          <AddressBlock poi={poi} />
+        </div>
+      </div>
+
+      <ActionBar poi={poi} />
+    </div>
+  );
+}
+
+function PoiHeader({
+  poi,
+  titles: { Title, Description },
+  onClose,
+  now,
+  charging,
+}: {
+  poi: Poi;
+  titles: TitleComponents;
+  onClose: () => void;
+  now: Date;
+  charging: LiveCharging | null;
+}) {
+  const distance = distanceMeters(poi);
+  const brand = isEv(poi) ? poi.data.brandName || poi.data.operatorName : isGas(poi) ? poi.data.brand : '';
+  const status = isGas(poi) ? gasStatus(poi.data, now) : null;
+
+  return (
+    <header className="px-5 pt-4 pb-4">
+      <div className="flex items-start gap-3">
+        <div
+          className={cn(
+            'island-subtle flex size-11 shrink-0 items-center justify-center rounded-2xl',
+            isEv(poi) && 'text-emerald-500',
+          )}
+        >
+          {isEv(poi) ? <Zap className="size-5" aria-hidden /> : <BrandIcon brand={brand} size={20} />}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <Title className="text-lg leading-snug font-semibold text-balance">{displayName(poi)}</Title>
+          <Description className="mt-0.5 truncate text-sm text-muted-foreground">
+            {[brand || (isEv(poi) ? 'Borne de recharge' : 'Station-service'), formatDistanceMeters(distance)]
+              .filter(Boolean)
+              .join(' · ')}
+          </Description>
+        </div>
+
+        <div className="-mr-1.5 -mt-1 flex shrink-0 items-center">
+          <IconAction label="Ouvrir la fiche complète" asChild>
+            <Link href={`/station/${poi.id}`}>
+              <Maximize2 className="size-4" />
+            </Link>
+          </IconAction>
+          <IconAction label="Fermer" onClick={onClose}>
+            <X className="size-4" />
+          </IconAction>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {status && <StatusPill status={status} />}
+        {isGas(poi) && poi.data.isAutomated2424 && status?.kind !== 'always' && (
+          <Pill icon={CreditCard}>Automate 24h/24</Pill>
+        )}
+        {isEv(poi) && charging && <EvSummaryPills data={poi.data} charging={charging} now={now} />}
+      </div>
+    </header>
   );
 }

@@ -1,16 +1,34 @@
-import { defineConfig } from 'orval';
+import { defineConfig } from 'orval'
 
 export default defineConfig({
-  prixCarburants: {
+  viaplena: {
     input: {
-      target: 'https://api.prix-carburants.2aaz.fr/swagger.yaml',
+      target: process.env.VIAPLENA_OPENAPI_URL ?? 'http://localhost:3000/openapi.json',
     },
     output: {
-      target: './src/api/endpoints.ts',
-      schemas: './src/api/models',
+      mode: 'tags-split',
+      target: './src/api/generated',
+      schemas: './src/api/generated/models',
       client: 'react-query',
       httpClient: 'fetch',
-      baseUrl: 'https://api.prix-carburants.2aaz.fr',
+      override: {
+        mutator: { path: './src/api/fetcher.ts', name: 'viaplenaFetcher' },
+        query: { useQuery: true, signal: true },
+        operations: {
+          findPoisNearby: {
+            query: { useInfinite: true, useInfiniteQueryParam: 'cursor' },
+          },
+          searchPois: {
+            query: { useInfinite: true, useInfiniteQueryParam: 'cursor' },
+          },
+          findPoisByCommune: {
+            query: { useInfinite: true, useInfiniteQueryParam: 'cursor' },
+          },
+          findPoisByDepartment: {
+            query: { useInfinite: true, useInfiniteQueryParam: 'cursor' },
+          },
+        },
+      },
     },
   },
-});
+})

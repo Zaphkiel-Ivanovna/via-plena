@@ -1,24 +1,40 @@
 'use client';
 
-import type { GasStation, FuelType } from '@/types/station';
+import { Fuel, Zap } from 'lucide-react';
+import type { Poi } from '@/lib/poi';
+import { fuelByName, isEv, isGas } from '@/lib/poi';
 import { getBrandColor } from '@/components/station/brand-icon';
 import { formatPrice } from '@/lib/format';
-import { Fuel } from 'lucide-react';
 
 interface StationMarkerProps {
-  station: GasStation;
-  fuelType?: FuelType;
+  poi: Poi;
+  fuelName?: string;
   scale?: number;
   isSelected?: boolean;
   onClick?: () => void;
 }
 
-export function StationMarker({ station, fuelType, scale = 1, isSelected, onClick }: StationMarkerProps) {
-  const color = getBrandColor(station.brand);
+export function StationMarker({ poi, fuelName, scale = 1, isSelected, onClick }: StationMarkerProps) {
   const s = isSelected ? scale * 1.15 : scale;
 
-  // No fuel selected → icon marker
-  if (!fuelType) {
+  if (isEv(poi)) {
+    return (
+      <button
+        onClick={onClick}
+        className="flex flex-col items-center"
+        style={{ transform: `scale(${s})`, transition: 'transform 150ms' }}
+      >
+        <div className="flex items-center justify-center size-8 rounded-full bg-emerald-500 text-white shadow-md">
+          <Zap size={16} />
+        </div>
+      </button>
+    );
+  }
+
+  const brand = isGas(poi) ? poi.data.brand : '';
+  const color = getBrandColor(brand);
+
+  if (!fuelName) {
     return (
       <button
         onClick={onClick}
@@ -35,9 +51,8 @@ export function StationMarker({ station, fuelType, scale = 1, isSelected, onClic
     );
   }
 
-  // Fuel selected → show price
-  const fuel = station.fuels.find((f) => f.type === fuelType);
-  const hasPrice = fuel !== undefined;
+  const fuel = fuelByName(poi, fuelName);
+  const hasPrice = fuel?.price != null;
 
   return (
     <button
@@ -53,7 +68,7 @@ export function StationMarker({ station, fuelType, scale = 1, isSelected, onClic
         className="rounded-full px-2 py-1 text-xs font-bold text-white shadow-md whitespace-nowrap"
         style={{ backgroundColor: color }}
       >
-        {hasPrice ? formatPrice(fuel.price) : <Fuel size={14} />}
+        {hasPrice ? formatPrice(fuel.price as number) : <Fuel size={14} />}
       </div>
       <div
         className="h-2.5 w-2.5 rounded-full -mt-0.5 border-2 border-white shadow"

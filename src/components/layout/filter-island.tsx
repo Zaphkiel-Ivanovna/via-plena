@@ -11,13 +11,13 @@ export function FilterIsland() {
           <FilterForm />
         </div>
       </ScrollArea>
-      <div className="border-t border-border/50 px-5 py-3 text-center text-[11px] text-muted-foreground/60">
+      <div className="border-t border-[var(--island-separator-bg)] px-5 py-3 text-center text-xs text-muted-foreground">
         Made with ❤️ by{' '}
         <a
           href="https://github.com/Zaphkiel-Ivanovna"
           target="_blank"
           rel="noopener noreferrer"
-          className="underline underline-offset-2 transition-colors hover:text-muted-foreground"
+          className="font-medium text-foreground/80 underline underline-offset-2 transition-colors hover:text-foreground"
         >
           Zaphkiel
         </a>

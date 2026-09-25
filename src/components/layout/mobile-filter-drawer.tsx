@@ -27,7 +27,7 @@ export function MobileFilterDrawer() {
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="max-h-[80vh] rounded-t-3xl">
-          <SheetHeader>
+          <SheetHeader className="sr-only">
             <SheetTitle>Filtres</SheetTitle>
             <SheetDescription>Affinez votre recherche</SheetDescription>
           </SheetHeader>

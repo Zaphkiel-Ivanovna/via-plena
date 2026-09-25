@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
+import { PUBLISHER, SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,11 +14,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
-
-const SITE_URL = "https://via-plena.zaphkiel.dev";
-const SITE_NAME = "ViaPlena";
-const SITE_DESCRIPTION =
-  "Comparez les prix des carburants en temps réel autour de vous. Trouvez la station-service la moins chère : Gazole, SP95, SP98, E10, E85, GPL.";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -32,30 +28,25 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} - Trouvez les meilleurs prix de carburant`,
+    default: `${SITE_TAGLINE} | ${SITE_NAME}`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   keywords: [
     "prix carburant",
-    "station-service",
-    "essence",
-    "gazole",
-    "diesel",
-    "SP95",
-    "SP98",
-    "E10",
+    "station essence moins chère",
+    "prix gazole",
+    "SP95-E10",
     "E85",
     "GPL",
-    "comparateur carburant",
-    "carburant pas cher",
-    "prix essence",
-    "station essence",
-    "France",
+    "borne de recharge",
+    "borne de recharge disponible",
+    "borne recharge rapide",
+    "borne recharge gratuite",
   ],
-  authors: [{ name: "Zaphkiel", url: "https://github.com/Zaphkiel-Ivanovna" }],
-  creator: "Zaphkiel",
+  authors: [{ name: PUBLISHER.name, url: PUBLISHER.url }],
+  creator: PUBLISHER.name,
   publisher: SITE_NAME,
   robots: {
     index: true,
@@ -73,7 +64,7 @@ export const metadata: Metadata = {
     locale: "fr_FR",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: `${SITE_NAME} - Trouvez les meilleurs prix de carburant`,
+    title: `${SITE_TAGLINE} | ${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -86,12 +77,16 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: `${SITE_NAME} - Trouvez les meilleurs prix de carburant`,
+    title: `${SITE_TAGLINE} | ${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     images: ["/logo_dark.png"],
   },
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon-48.png", sizes: "48x48", type: "image/png" },
+      { url: "/icon-96.png", sizes: "96x96", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       {
         url: "/favicon-dark.png",
         media: "(prefers-color-scheme: dark)",
@@ -113,10 +108,7 @@ export const metadata: Metadata = {
     ],
   },
   manifest: "/manifest.json",
-  alternates: {
-    canonical: SITE_URL,
-  },
-  category: "technology",
+  category: "travel",
 };
 
 export default function RootLayout({
@@ -132,23 +124,28 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify([
-              {
-                "@context": "https://schema.org",
-                "@type": "WebSite",
-                name: SITE_NAME,
-                url: SITE_URL,
-                description: SITE_DESCRIPTION,
-                inLanguage: "fr",
-              },
-              {
-                "@context": "https://schema.org",
-                "@type": "Organization",
-                name: SITE_NAME,
-                url: SITE_URL,
-                logo: `${SITE_URL}/logo.png`,
-              },
-            ]),
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "WebSite",
+                  "@id": `${SITE_URL}/#website`,
+                  name: SITE_NAME,
+                  url: SITE_URL,
+                  description: SITE_DESCRIPTION,
+                  inLanguage: "fr-FR",
+                  publisher: { "@id": `${SITE_URL}/#organization` },
+                },
+                {
+                  "@type": "Organization",
+                  "@id": `${SITE_URL}/#organization`,
+                  name: SITE_NAME,
+                  url: SITE_URL,
+                  logo: { "@type": "ImageObject", url: `${SITE_URL}/logo_dark.png`, width: 480, height: 480 },
+                  sameAs: [PUBLISHER.url],
+                },
+              ],
+            }).replace(/</g, "\\u003c"),
           }}
         />
         <AppProviders>{children}</AppProviders>

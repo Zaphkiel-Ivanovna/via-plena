@@ -1,15 +1,15 @@
 'use client';
 
-import { Slider } from '@/components/ui/slider';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useAppStore } from '@/stores/app-store';
-import { MapPin } from 'lucide-react';
+import { SEGMENTED_GROUP_CLASS, SEGMENTED_ITEM_CLASS } from './segmented';
 
-const SIZE_LABELS: Record<number, string> = {
-  0.75: 'S',
-  1: 'M',
-  1.25: 'L',
-  1.5: 'XL',
-};
+const SIZES = [
+  { value: 0.75, label: 'S', name: 'Petits' },
+  { value: 1, label: 'M', name: 'Moyens' },
+  { value: 1.25, label: 'L', name: 'Grands' },
+  { value: 1.5, label: 'XL', name: 'Très grands' },
+];
 
 export function MarkerSizeFilter() {
   const markerSize = useAppStore((s) => s.markerSize);
@@ -17,22 +17,21 @@ export function MarkerSizeFilter() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold flex items-center gap-1.5">
-          <MapPin className="size-3.5 text-primary/70" />
-          Taille des marqueurs
-        </h4>
-        <span className="text-xs text-muted-foreground">
-          {SIZE_LABELS[markerSize] ?? `${Math.round(markerSize * 100)}%`}
-        </span>
-      </div>
-      <Slider
-        value={[markerSize]}
-        onValueChange={([v]) => setMarkerSize(v)}
-        min={0.75}
-        max={1.5}
-        step={0.25}
-      />
+      <h4 className="text-sm font-semibold">Taille des marqueurs</h4>
+      <ToggleGroup
+        type="single"
+        spacing={1}
+        value={String(markerSize)}
+        onValueChange={(v) => v && setMarkerSize(Number(v))}
+        className={SEGMENTED_GROUP_CLASS}
+        aria-label="Taille des marqueurs"
+      >
+        {SIZES.map((s) => (
+          <ToggleGroupItem key={s.value} value={String(s.value)} aria-label={`Marqueurs ${s.name.toLowerCase()}`} className={SEGMENTED_ITEM_CLASS}>
+            {s.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }

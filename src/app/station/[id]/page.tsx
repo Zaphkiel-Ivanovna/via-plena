@@ -1,264 +1,268 @@
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { BrandIcon } from '@/components/station/brand-icon';
-import { ArrowLeft, MapPin, Navigation, Clock } from 'lucide-react';
-import { SiGooglemaps, SiWaze, SiApple } from '@icons-pack/react-simple-icons';
-import { StationMap } from '@/components/station/station-map';
-import { StationBackground } from '@/components/station/station-background';
-import { Logo } from '@/components/shared/logo';
-import { fetchStationById } from '@/services/station-service';
-import { FUEL_LABELS, FUEL_NAMES, SERVICE_LABELS } from '@/lib/constants';
-import { formatPrice, formatDate } from '@/lib/format';
 import type { Metadata } from 'next';
-import type { GasStation } from '@/types/station';
+import { findPoisNearby, getPoiById } from '@/api/generated/poi/poi';
+import { ApiError } from '@/api/fetcher';
+import { StationPageView } from '@/components/station/station-page-view';
+import { FUEL_NAMES_ORDER, fuelFullName, fuelSearchName } from '@/lib/constants';
+import { distanceMeters, isEv, isGas, type Poi } from '@/lib/poi';
+import {
+  PLUG_LABELS,
+  chargingPoints,
+  formatPoiAddress,
+  formatPower,
+  formatPriceValue,
+  isAlwaysOpenEv,
+  parseGasSchedule,
+  streetLabel,
+  type PlugKind,
+} from '@/lib/poi-details';
+import { poiIndexVerdict } from '@/lib/seo/indexability';
+import { SITE_NAME, SITE_URL } from '@/lib/site';
+import { describeService } from '@/components/station/service-icon';
 
-const SITE_URL = 'https://via-plena.zaphkiel.dev';
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  return [];
+}
+
+const NEARBY_RADIUS_M = 3000;
+const NEARBY_LIMIT = 8;
+const TITLE_MAX = 60;
 
 interface StationPageProps {
   params: Promise<{ id: string }>;
 }
 
+const loadPoi = cache(async (id: string) => {
+  try {
+    const res = await getPoiById(id, { next: { revalidate } });
+    return { poi: res.data as Poi, renderedAt: Date.now() };
+  } catch (error) {
+    if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) return null;
+    throw error;
+  }
+});
+
+const loadNearby = cache(async (poi: Poi): Promise<Poi[]> => {
+  try {
+    const res = await findPoisNearby(
+      { lat: poi.lat, lng: poi.lng, radius: NEARBY_RADIUS_M, type: poi.type, limit: NEARBY_LIMIT + 1 },
+      { next: { revalidate } },
+    );
+    return (res.data as unknown as Poi[]).filter((p) => p.id !== poi.id).slice(0, NEARBY_LIMIT);
+  } catch {
+    return [];
+  }
+});
+
+const cleanName = (p: Poi) => p.name.split(' | ').slice(-1)[0];
+
+const pricedFuels = (p: Poi) =>
+  isGas(p)
+    ? [...p.data.fuels]
+        .filter((f): f is typeof f & { price: number } => f.price != null)
+        .sort((a, b) => FUEL_NAMES_ORDER.indexOf(a.name as never) - FUEL_NAMES_ORDER.indexOf(b.name as never))
+    : [];
+
+function evSummary(p: Poi) {
+  if (!isEv(p)) return null;
+  const points = chargingPoints(p.data);
+  const maxPower = points.reduce((m, cp) => Math.max(m, cp.nominalPower), 0);
+  const plugs = new Set<PlugKind>();
+  for (const cp of points) {
+    if (cp.hasPlugType2) plugs.add('type2');
+    if (cp.hasPlugTypeComboCcs) plugs.add('ccs');
+    if (cp.hasPlugTypeChademo) plugs.add('chademo');
+    if (cp.hasPlugTypeEf) plugs.add('ef');
+  }
+  return { count: p.data.chargingPointCount || points.length, maxPower, plugs: [...plugs].map((k) => PLUG_LABELS[k]) };
+}
+
+function fitTitle(candidates: string[]): { absolute: string } {
+  const fitting = candidates.find((t) => t.length <= TITLE_MAX) ?? candidates[candidates.length - 1];
+  const branded = `${fitting} | ${SITE_NAME}`;
+  return { absolute: branded.length <= TITLE_MAX ? branded : fitting };
+}
+
+function stationTitle(poi: Poi): { absolute: string } {
+  const street = streetLabel(poi);
+  if (isGas(poi)) {
+    const label = poi.data.brand || cleanName(poi);
+    const [first, second] = pricedFuels(poi);
+    const price = (f: { name: string; price: number }) => `${fuelSearchName(f.name)} ${formatPriceValue(f.price)} €`;
+    return fitTitle([
+      ...(first && second ? [`${label} ${street}, ${poi.city} : ${price(first)}, ${price(second)}`] : []),
+      ...(first ? [`${label} ${street}, ${poi.city} : ${price(first)}`] : []),
+      `${label} ${street}, ${poi.city}`,
+      `${label} ${poi.city} : prix des carburants`,
+    ]);
+  }
+  const ev = evSummary(poi)!;
+  const power = ev.maxPower ? `, ${formatPower(ev.maxPower)}` : '';
+  const name = cleanName(poi);
+  const where = name.toLowerCase().includes(poi.city.toLowerCase()) ? name : `${name}, ${poi.city}`;
+  return fitTitle([
+    `${where} : borne de recharge${power}`,
+    `Borne ${where}${power}`,
+    `Borne de recharge ${street}, ${poi.city}`,
+  ]);
+}
+
 export async function generateMetadata({ params }: StationPageProps): Promise<Metadata> {
   const { id } = await params;
-  const station = await fetchStationById(Number(id));
-  if (!station) {
-    return { title: 'Station non trouvée' };
-  }
+  const loaded = await loadPoi(id);
+  if (!loaded) return { title: 'Station introuvable', robots: { index: false } };
 
-  const title = `${station.name} (${station.brand}) - Prix carburants à ${station.city}`;
-  const description = `Prix des carburants à ${station.name} (${station.brand}), ${station.address}, ${station.postalCode} ${station.city}. ${station.fuels.map((f) => `${FUEL_LABELS[f.type]} : ${formatPrice(f.price)}`).join(', ')}.`;
-  const url = `${SITE_URL}/station/${id}`;
+  const { poi, renderedAt } = loaded;
+  const name = cleanName(poi);
+  const url = `${SITE_URL}/station/${poi.id}`;
+  const title = stationTitle(poi);
+  let description: string;
+
+  if (isGas(poi)) {
+    const brand = poi.data.brand && !name.toLowerCase().includes(poi.data.brand.toLowerCase()) ? ` (${poi.data.brand})` : '';
+    const prices = pricedFuels(poi)
+      .map((f) => `${fuelSearchName(f.name)} ${formatPriceValue(f.price)} €`)
+      .join(', ');
+    description = `Prix du jour chez ${name}${brand}, ${formatPoiAddress(poi)}.${prices ? ` ${prices}.` : ''} Historique des prix, horaires, services et itinéraire.`;
+  } else {
+    const ev = evSummary(poi)!;
+    description = `Borne de recharge ${name}, ${formatPoiAddress(poi)}. ${ev.count} point${ev.count > 1 ? 's' : ''} de charge${ev.maxPower ? ` jusqu'à ${formatPower(ev.maxPower)}` : ''}${ev.plugs.length ? ` (${ev.plugs.join(', ')})` : ''}. Disponibilité en temps réel et itinéraire.`;
+  }
 
   return {
     title,
     description,
     alternates: { canonical: url },
-    robots: { index: true, follow: true },
-    openGraph: {
-      type: 'website',
-      url,
-      title,
-      description,
-      siteName: 'ViaPlena',
-      locale: 'fr_FR',
-    },
-    twitter: {
-      card: 'summary',
-      title,
-      description,
-    },
+    robots: { index: poiIndexVerdict(poi, renderedAt).index, follow: true },
+    openGraph: { type: 'website', url, title: title.absolute, description, siteName: SITE_NAME, locale: 'fr_FR' },
+    twitter: { card: 'summary', title: title.absolute, description },
   };
 }
 
-function buildStationJsonLd(station: GasStation) {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'GasStation',
-    '@id': `${SITE_URL}/station/${station.id}#station`,
-    name: station.name,
-    image: `${SITE_URL}/logo.png`,
-    brand: { '@type': 'Brand', name: station.brand },
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: station.address,
-      addressLocality: station.city,
-      postalCode: station.postalCode,
-      addressCountry: 'FR',
-    },
-    geo: {
-      '@type': 'GeoCoordinates',
-      latitude: station.latitude,
-      longitude: station.longitude,
-    },
-    url: `${SITE_URL}/station/${station.id}`,
-    currenciesAccepted: 'EUR',
-    ...(station.fuels.length > 0 && {
-      makesOffer: station.fuels.map((fuel) => ({
-        '@type': 'Offer',
-        price: fuel.price,
-        priceCurrency: 'EUR',
-        itemOffered: {
-          '@type': 'Product',
-          name: FUEL_NAMES[fuel.type],
-        },
-      })),
-    }),
-  };
+const SCHEMA_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const hhmm = (minutes: number) =>
+  `${String(Math.floor((minutes % 1440) / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+
+function openingHoursSpecification(p: Poi) {
+  if (isEv(p)) {
+    return isAlwaysOpenEv(p.data)
+      ? [{ '@type': 'OpeningHoursSpecification', dayOfWeek: SCHEMA_DAYS, opens: '00:00', closes: '23:59' }]
+      : undefined;
+  }
+  if (!isGas(p)) return undefined;
+  const week = parseGasSchedule(p.data);
+  if (!week) return undefined;
+  return week.flatMap((day) =>
+    day.allDay
+      ? [{ '@type': 'OpeningHoursSpecification', dayOfWeek: SCHEMA_DAYS[day.index], opens: '00:00', closes: '23:59' }]
+      : day.ranges.map((r) => ({
+          '@type': 'OpeningHoursSpecification',
+          dayOfWeek: SCHEMA_DAYS[day.index],
+          opens: hhmm(r.start),
+          closes: hhmm(Math.min(r.end, 1439)),
+        })),
+  );
 }
 
-function buildBreadcrumbJsonLd(station: GasStation) {
+function amenityFeature(p: Poi) {
+  const feature = (name: string, value: string | number | boolean = true) => ({
+    '@type': 'LocationFeatureSpecification',
+    name,
+    value,
+  });
+  if (isGas(p)) {
+    const services = p.data.services.map((s) => feature(describeService(s).label));
+    return p.data.isAutomated2424 ? [feature('Automate carte bancaire 24h/24'), ...services] : services;
+  }
+  const ev = evSummary(p);
+  if (!ev) return [];
+  return [
+    feature('Points de charge', ev.count),
+    ...(ev.maxPower ? [feature('Puissance maximale (kW)', ev.maxPower)] : []),
+    ...ev.plugs.map((plug) => feature(`Prise ${plug}`)),
+  ];
+}
+
+function buildJsonLd(p: Poi) {
+  const url = `${SITE_URL}/station/${p.id}`;
+  const brand = isGas(p) ? p.data.brand : isEv(p) ? p.data.brandName || p.data.operatorName : '';
+  const ev = evSummary(p);
+  const fuels = pricedFuels(p);
+  const commune = p.commune?.slug ? p.commune : null;
+  const hours = openingHoursSpecification(p);
+  const amenities = amenityFeature(p);
+
   return {
     '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
-    itemListElement: [
+    '@graph': [
       {
-        '@type': 'ListItem',
-        position: 1,
-        name: 'Accueil',
-        item: SITE_URL,
+        '@type': isGas(p) ? 'GasStation' : 'AutomotiveBusiness',
+        '@id': `${url}#station`,
+        name: cleanName(p),
+        url,
+        image: `${SITE_URL}/logo_dark.png`,
+        ...(brand && { brand: { '@type': 'Brand', name: brand } }),
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: p.address.split(',')[0].trim(),
+          addressLocality: p.city,
+          postalCode: p.postalCode,
+          addressRegion: p.region,
+          addressCountry: 'FR',
+        },
+        geo: { '@type': 'GeoCoordinates', latitude: p.lat, longitude: p.lng },
+        ...(hours?.length && { openingHoursSpecification: hours }),
+        ...(amenities.length && { amenityFeature: amenities }),
+        ...(ev && {
+          description: `${ev.count} point${ev.count > 1 ? 's' : ''} de charge${ev.maxPower ? `, jusqu'à ${formatPower(ev.maxPower)}` : ''}`,
+        }),
+        ...(fuels.length > 0 && {
+          currenciesAccepted: 'EUR',
+          makesOffer: fuels.map((f) => ({
+            '@type': 'Offer',
+            priceSpecification: {
+              '@type': 'UnitPriceSpecification',
+              price: f.price,
+              priceCurrency: 'EUR',
+              unitCode: 'LTR',
+              unitText: 'litre',
+            },
+            ...(f.lastUpdate && { validFrom: f.lastUpdate }),
+            itemOffered: { '@type': 'Product', name: f.name === 'Gazole' ? 'Gazole' : fuelFullName(f.name) },
+          })),
+        }),
       },
       {
-        '@type': 'ListItem',
-        position: 2,
-        name: station.name,
-        item: `${SITE_URL}/station/${station.id}`,
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { name: 'Accueil', item: SITE_URL },
+          ...(commune ? [{ name: commune.name, item: `${SITE_URL}/prix-carburant/${commune.slug}` }] : []),
+          { name: cleanName(p), item: url },
+        ].map((it, i) => ({ '@type': 'ListItem', position: i + 1, ...it })),
       },
     ],
   };
 }
 
+const jsonLd = (data: unknown) => ({ __html: JSON.stringify(data).replace(/</g, '\\u003c') });
+
 export default async function StationPage({ params }: StationPageProps) {
   const { id } = await params;
-  const station = await fetchStationById(Number(id));
-
-  if (!station) {
-    notFound();
-  }
-
-  const cheapestPrice = station.fuels.length > 0
-    ? Math.min(...station.fuels.map((f) => f.price))
-    : null;
-
-  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}`;
-  const wazeUrl = `https://www.waze.com/ul?ll=${station.latitude},${station.longitude}&navigate=yes`;
-  const appleMapsUrl = `https://maps.apple.com/?daddr=${station.latitude},${station.longitude}`;
+  const loaded = await loadPoi(id);
+  if (!loaded) notFound();
+  const nearby = await loadNearby(loaded.poi);
 
   return (
-    <div className="relative min-h-dvh bg-black overflow-hidden p-4 md:p-8">
-      <StationBackground />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildStationJsonLd(station)) }}
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(buildJsonLd(loaded.poi))} />
+      <StationPageView
+        poi={loaded.poi}
+        renderedAt={loaded.renderedAt}
+        nearby={nearby.map((p) => ({ poi: p, distance: distanceMeters(p) }))}
       />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(buildBreadcrumbJsonLd(station)) }}
-      />
-      <main className="relative z-10 mx-auto max-w-2xl space-y-4">
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-xl bg-white/[0.06] border border-white/[0.08] px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-white/[0.1] transition-all"
-          >
-            <ArrowLeft className="size-4" />
-            Retour
-          </Link>
-          <Link href="/">
-            <Logo className="h-5 w-auto text-foreground" />
-          </Link>
-        </div>
-
-        <div className="rounded-3xl border border-white/[0.08] bg-background/70 backdrop-blur-xl shadow-2xl shadow-black/30 overflow-hidden">
-          <div className="p-6 pb-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-xl font-bold">{station.name}</h1>
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 mt-2 text-xs font-medium text-primary border border-primary/20">
-                  <BrandIcon brand={station.brand} size={14} />
-                  {station.brand}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-start gap-2 rounded-xl bg-white/[0.04] border border-white/[0.06] p-3">
-              <MapPin className="mt-0.5 size-4 shrink-0 text-primary/70" />
-              <p className="text-sm">{station.address}, {station.postalCode} {station.city}</p>
-            </div>
-            <StationMap
-              latitude={station.latitude}
-              longitude={station.longitude}
-              name={station.name}
-            />
-          </div>
-
-          <div className="h-px bg-white/[0.06]" />
-
-          <div className="p-6 space-y-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <span className="inline-block size-2 rounded-full bg-emerald-500" />
-              Prix des carburants
-            </h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {station.fuels.map((fuel) => (
-                <div
-                  key={fuel.type}
-                  className={`flex items-center justify-between rounded-xl border p-3.5 transition-colors ${
-                    cheapestPrice !== null && fuel.price === cheapestPrice
-                      ? 'border-emerald-500/30 bg-emerald-500/10'
-                      : 'border-white/[0.06] bg-white/[0.03]'
-                  }`}
-                >
-                  <span className="text-sm font-medium">{FUEL_LABELS[fuel.type]}</span>
-                  <span className="font-semibold tabular-nums">{formatPrice(fuel.price)}</span>
-                </div>
-              ))}
-            </div>
-            {station.fuels[0] && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="size-3" />
-                Mis a jour le {formatDate(station.fuels[0].updatedAt)}
-              </p>
-            )}
-          </div>
-
-          <div className="h-px bg-white/[0.06]" />
-
-          <div className="p-6 space-y-3">
-            <h3 className="text-sm font-semibold">Services</h3>
-            {station.services.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {station.services.map((service) => (
-                  <div
-                    key={service}
-                    className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 text-sm text-muted-foreground"
-                  >
-                    {SERVICE_LABELS[service]}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Aucun service disponible</p>
-            )}
-          </div>
-
-          <div className="h-px bg-white/[0.06]" />
-
-          <div className="p-6 space-y-2">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Navigation className="size-3.5" />
-              Itinéraire
-            </h3>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <a
-                href={googleMapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-medium text-primary-foreground transition-all hover:opacity-90"
-              >
-                <SiGooglemaps size={16} />
-                Google Maps
-              </a>
-              <a
-                href={wazeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-sm font-medium transition-all hover:bg-white/[0.1]"
-              >
-                <SiWaze size={16} />
-                Waze
-              </a>
-              <a
-                href={appleMapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-sm font-medium transition-all hover:bg-white/[0.1]"
-              >
-                <SiApple size={16} />
-                Apple Plans
-              </a>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
+    </>
   );
 }

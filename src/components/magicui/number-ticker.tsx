@@ -29,7 +29,6 @@ export function NumberTicker({
       if (startRef.current === null) startRef.current = timestamp;
       const elapsed = timestamp - startRef.current;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out quad
       const eased = 1 - (1 - progress) * (1 - progress);
       const current = fromRef.current + (value - fromRef.current) * eased;
       setDisplayValue(current);

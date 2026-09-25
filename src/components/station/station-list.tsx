@@ -3,15 +3,20 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StationCard } from './station-card';
 import { EmptyState } from '@/components/shared/empty-state';
-import { useStations } from '@/hooks/use-stations';
 import { Fuel } from 'lucide-react';
 import { BlurFade } from '@/components/magicui/blur-fade';
 import { NumberTicker } from '@/components/magicui/number-ticker';
+import type { Poi } from '@/lib/poi';
 
-export function StationList() {
-  const { data: stations, isLoading } = useStations();
+interface StationListProps {
+  pois: Poi[];
+  isLoading?: boolean;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+}
 
-  if (isLoading) {
+export function StationList({ pois, isLoading, onLoadMore, hasMore }: StationListProps) {
+  if (isLoading && pois.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16">
         <div className="relative">
@@ -25,7 +30,7 @@ export function StationList() {
     );
   }
 
-  if (!stations || stations.length === 0) {
+  if (pois.length === 0) {
     return <EmptyState />;
   }
 
@@ -36,21 +41,25 @@ export function StationList() {
           <div className="flex items-center justify-between mb-3 px-1">
             <p className="text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">
-                <NumberTicker value={stations.length} />
+                <NumberTicker value={pois.length} />
               </span>{' '}
-              stations trouvees
+              stations trouvées
             </p>
           </div>
         </BlurFade>
         <div className="flex flex-col gap-2.5">
-          {stations.map((station, index) => (
-            <StationCard
-              key={station.id}
-              station={station}
-              delay={index * 0.04}
-            />
+          {pois.map((poi, index) => (
+            <StationCard key={poi.id} poi={poi} delay={Math.min(index * 0.04, 0.5)} />
           ))}
         </div>
+        {hasMore && (
+          <button
+            onClick={onLoadMore}
+            className="mt-3 w-full rounded-2xl border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+          >
+            Charger plus
+          </button>
+        )}
       </div>
     </ScrollArea>
   );

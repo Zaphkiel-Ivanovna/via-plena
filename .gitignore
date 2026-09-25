@@ -42,3 +42,6 @@ next-env.d.ts
 
 scripts/
 screenshots/
+
+# maplibre-gl worker (copied by yarn maplibre:worker)
+/public/maplibre/

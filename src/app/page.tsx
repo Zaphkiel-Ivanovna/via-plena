@@ -1,91 +1,84 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { getCoverageStats } from '@/api/generated/stats/stats';
+import { HomeView } from '@/components/home/home-view';
+import { SiteFooter } from '@/components/layout/site-footer';
+import { FUEL_NAMES_ORDER, fuelFullName, fuelLabel } from '@/lib/constants';
+import { formatPriceValue } from '@/lib/poi-details';
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from '@/lib/site';
 
-import { useEffect } from 'react';
-import { MapDynamic } from '@/components/map/map-dynamic';
-import { StationList } from '@/components/station/station-list';
-import { StationDetail } from '@/components/station/station-detail';
-import { HeaderIsland } from '@/components/layout/header-island';
-import { FilterIsland } from '@/components/layout/filter-island';
-import { useAppStore } from '@/stores/app-store';
-import { useGeolocation } from '@/hooks/use-geolocation';
-import { isMapThemeDark, DEFAULT_CENTER } from '@/lib/constants';
+export const revalidate = 600;
 
-export default function Home() {
-  const viewMode = useAppStore((s) => s.viewMode);
-  const setLocation = useAppStore((s) => s.setLocation);
-  const setSelectedStation = useAppStore((s) => s.setSelectedStation);
-  const selectedStationId = useAppStore((s) => s.selectedStationId);
-  const mapTheme = useAppStore((s) => s.mapTheme);
-  const { location, error, loading, requestLocation } = useGeolocation();
+export const metadata: Metadata = {
+  title: { absolute: `${SITE_TAGLINE} | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: SITE_URL },
+};
 
-  // Sync URL query param → store on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const stationParam = params.get('station');
-    if (stationParam) {
-      const id = Number(stationParam);
-      if (!isNaN(id)) setSelectedStation(id);
-    }
-  }, [setSelectedStation]);
+async function loadStats() {
+  try {
+    const res = await getCoverageStats({ next: { revalidate } });
+    return res.status === 200 ? res.data : null;
+  } catch {
+    return null;
+  }
+}
 
-  // Sync store → URL when selectedStationId changes
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (selectedStationId !== null) {
-      url.searchParams.set('station', String(selectedStationId));
-    } else {
-      url.searchParams.delete('station');
-    }
-    window.history.replaceState(null, '', url.toString());
-  }, [selectedStationId]);
+const count = new Intl.NumberFormat('fr-FR');
 
-  useEffect(() => {
-    requestLocation();
-  }, [requestLocation]);
-
-  useEffect(() => {
-    if (location) {
-      setLocation(location);
-    } else if (error && !loading) {
-      setLocation(DEFAULT_CENTER);
-    }
-  }, [location, error, loading, setLocation]);
-
-  useEffect(() => {
-    const html = document.documentElement;
-    if (isMapThemeDark(mapTheme)) {
-      html.classList.add('dark');
-    } else {
-      html.classList.remove('dark');
-    }
-  }, [mapTheme]);
-
-  const isDark = isMapThemeDark(mapTheme);
+export default async function HomePage() {
+  const stats = await loadStats();
+  const fuels = stats
+    ? FUEL_NAMES_ORDER.map((name) => stats.topGasFuels.find((f) => f.fuel === name)).filter(
+        (f): f is NonNullable<typeof f> & { avgPrice: number } => f?.avgPrice != null,
+      )
+    : [];
 
   return (
-    <div className={`relative h-dvh w-full overflow-hidden ${isDark ? 'bg-black' : 'bg-gray-100'}`}>
-      <h1 className="sr-only">Comparateur de prix de carburants en France</h1>
-      <div className="absolute inset-0">
-        <MapDynamic />
-      </div>
+    <>
+      <HomeView />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center p-3 md:p-4 lg:left-[296px]">
-        <HeaderIsland />
-      </div>
+      <section aria-labelledby="home-title" className="bg-background">
+        <div className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
+          <h1 id="home-title" className="max-w-3xl text-3xl leading-tight font-semibold tracking-tight text-balance md:text-4xl">
+            Prix des carburants et bornes de recharge, en temps réel
+          </h1>
+          <p className="mt-4 max-w-[65ch] text-base leading-relaxed text-muted-foreground">
+            {SITE_NAME} compare les prix déclarés par{' '}
+            {stats ? `${count.format(stats.totals.gasStations)} stations-service` : 'les stations-service'} et affiche la
+            disponibilité de {stats ? `${count.format(stats.totals.evStations)} bornes de recharge` : 'milliers de bornes de recharge'}{' '}
+            en France : libre, occupée ou hors service. Les données viennent des sources officielles et sont mises à jour en
+            continu.
+          </p>
 
-      <div className="pointer-events-none absolute left-0 top-0 z-10 hidden h-full pt-3 pb-3 pl-3 md:pt-4 md:pb-4 md:pl-4 lg:flex">
-        <FilterIsland />
-      </div>
-
-      {viewMode === 'list' && (
-        <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-3 md:px-4 md:pb-4 lg:left-[300px]">
-          <div className="island-panel w-full max-w-2xl rounded-3xl overflow-hidden max-h-[calc(100dvh-5rem)] backdrop-blur-2xl backdrop-saturate-[180%]">
-            <StationList />
-          </div>
+          {fuels.length > 0 && (
+            <div className="mt-10">
+              <h2 className="text-lg font-semibold">Prix moyens en France</h2>
+              <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {fuels.map((f) => (
+                  <div key={f.fuel} className="rounded-2xl border border-[var(--island-subtle-border)] bg-[var(--island-subtle-bg)] p-4">
+                    <dt className="text-sm text-muted-foreground" title={fuelFullName(f.fuel)}>
+                      {fuelLabel(f.fuel)} <span className="sr-only">({fuelFullName(f.fuel)})</span>
+                    </dt>
+                    <dd className="mt-1 text-xl font-semibold tabular-nums">
+                      {formatPriceValue(f.avgPrice)}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">€/L</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Moyenne des prix relevés dans les stations qui vendent chaque carburant.{' '}
+                <Link href="/stats" className="font-medium text-foreground underline underline-offset-4">
+                  Voir toutes les statistiques
+                </Link>
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </section>
 
-      <StationDetail />
-    </div>
+      <SiteFooter />
+    </>
   );
 }

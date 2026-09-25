@@ -1,14 +1,9 @@
 'use client';
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { RADIUS_OPTIONS } from '@/lib/constants';
 import { useFilterStore } from '@/stores/filter-store';
+import { SEGMENTED_GROUP_CLASS, SEGMENTED_ITEM_CLASS } from './segmented';
 
 export function RadiusFilter() {
   const radius = useFilterStore((s) => s.radius);
@@ -17,21 +12,20 @@ export function RadiusFilter() {
   return (
     <div className="space-y-3">
       <h4 className="text-sm font-semibold">Rayon de recherche</h4>
-      <Select
+      <ToggleGroup
+        type="single"
+        spacing={1}
         value={String(radius)}
-        onValueChange={(val) => setRadius(Number(val))}
+        onValueChange={(v) => v && setRadius(Number(v))}
+        className={SEGMENTED_GROUP_CLASS}
+        aria-label="Rayon de recherche"
       >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {RADIUS_OPTIONS.map((r) => (
-            <SelectItem key={r} value={String(r)}>
-              {r} km
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        {RADIUS_OPTIONS.map((r) => (
+          <ToggleGroupItem key={r} value={String(r)} aria-label={`${r} kilomètres`} className={SEGMENTED_ITEM_CLASS}>
+            {r} km
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }

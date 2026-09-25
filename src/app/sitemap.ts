@@ -1,14 +1,8 @@
-import type { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next'
+import { SITE_URL } from '@/lib/site'
 
-const SITE_URL = 'https://via-plena.zaphkiel.dev';
+const HUB_PATHS = ['', '/stats', '/methodologie', '/a-propos']
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [
-    {
-      url: SITE_URL,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1,
-    },
-  ];
+  return HUB_PATHS.map((path) => ({ url: `${SITE_URL}${path}` }))
 }

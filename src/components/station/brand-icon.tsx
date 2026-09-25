@@ -49,10 +49,6 @@ export function BrandIcon({ brand, size = 16, className }: BrandIconProps) {
   return <Fuel size={size} className={className ?? 'text-muted-foreground'} />;
 }
 
-/**
- * Extra brand colors for brands without a Simple Icon.
- * Used by the map marker for coloring.
- */
 const BRAND_COLORS: Record<string, string> = {
   TotalEnergies: '#FF0000',
   'TotalEnergies Access': '#FF0000',

@@ -2,16 +2,15 @@
 
 import { Badge } from '@/components/ui/badge';
 import { NumberTicker } from '@/components/magicui/number-ticker';
-import { FUEL_LABELS } from '@/lib/constants';
-import type { FuelType } from '@/types/station';
+import { fuelLabel } from '@/lib/constants';
 
 interface FuelPriceBadgeProps {
-  fuelType: FuelType;
+  fuelName: string;
   price: number;
   isCheapest?: boolean;
 }
 
-export function FuelPriceBadge({ fuelType, price, isCheapest = false }: FuelPriceBadgeProps) {
+export function FuelPriceBadge({ fuelName, price, isCheapest = false }: FuelPriceBadgeProps) {
   return (
     <Badge
       variant={isCheapest ? 'default' : 'secondary'}
@@ -22,7 +21,7 @@ export function FuelPriceBadge({ fuelType, price, isCheapest = false }: FuelPric
       }
     >
       <span className="text-[10px] uppercase tracking-wider opacity-70 mr-1">
-        {FUEL_LABELS[fuelType]}
+        {fuelLabel(fuelName)}
       </span>
       <span className="font-semibold">
         <NumberTicker value={price} decimalPlaces={3} />

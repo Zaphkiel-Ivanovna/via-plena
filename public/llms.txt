@@ -1,0 +1,18 @@
+# ViaPlena
+
+> Comparateur gratuit et indépendant des prix des carburants et des bornes de recharge en France : prix déclarés par près de 10 000 stations-service (gazole, SP95-E10, SP95, SP98, E85, GPLc) et bornes de recharge avec leur disponibilité en temps réel (libre, occupée, hors service).
+
+Données issues de sources publiques officielles : prix-carburants.gouv.fr (prix relus toutes les 6 heures, historique conservé par station), fichier consolidé des bornes IRVE de data.gouv.fr (relu chaque nuit) et flux IRVE dynamique des opérateurs (disponibilité relue toutes les 2 minutes). Les prix sont déclarés par les stations ; le prix affiché à la pompe fait foi.
+
+## Pages principales
+
+- [Carte](https://via-plena.zaphkiel.dev/): stations-service et bornes autour de soi, filtres par carburant, puissance, prise, disponibilité
+- [Statistiques nationales](https://via-plena.zaphkiel.dev/stats): prix moyens par carburant, stations et bornes par région, principaux opérateurs
+- Fiches station : `https://via-plena.zaphkiel.dev/station/{id}` (prix du jour, historique, horaires, services, points de charge, disponibilité)
+- Pages ville : `https://via-plena.zaphkiel.dev/prix-carburant/{ville}` (ex. /prix-carburant/le-mans ; prix les plus bas et moyens par carburant, stations-service et bornes de recharge de la commune)
+
+## À propos
+
+- [Méthodologie et sources](https://via-plena.zaphkiel.dev/methodologie)
+- [À propos](https://via-plena.zaphkiel.dev/a-propos)
+- [Mentions légales](https://via-plena.zaphkiel.dev/mentions-legales)

@@ -1,25 +1,25 @@
-'use client';
+'use client'
 
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { Coordinates } from '@/types/geo';
-import { DEFAULT_MAP_THEME } from '@/lib/constants';
+import { DEFAULT_MAP_THEME } from '@/lib/constants'
+import type { Coordinates } from '@/types/geo'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-export type ViewMode = 'map' | 'list';
+export type ViewMode = 'map' | 'list'
 
 interface AppState {
-  location: Coordinates | null;
-  viewMode: ViewMode;
-  selectedStationId: number | null;
-  searchTerm: string;
-  mapTheme: string;
-  markerSize: number;
-  setLocation: (location: Coordinates | null) => void;
-  setViewMode: (mode: ViewMode) => void;
-  setSelectedStation: (id: number | null) => void;
-  setSearchTerm: (term: string) => void;
-  setMapTheme: (theme: string) => void;
-  setMarkerSize: (size: number) => void;
+  location: Coordinates | null
+  viewMode: ViewMode
+  selectedPoiId: string | null
+  searchTerm: string
+  mapTheme: string
+  markerSize: number
+  setLocation: (location: Coordinates | null) => void
+  setViewMode: (mode: ViewMode) => void
+  setSelectedPoi: (id: string | null) => void
+  setSearchTerm: (term: string) => void
+  setMapTheme: (theme: string) => void
+  setMarkerSize: (size: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -27,13 +27,13 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       location: null,
       viewMode: 'map',
-      selectedStationId: null,
+      selectedPoiId: null,
       searchTerm: '',
       mapTheme: DEFAULT_MAP_THEME,
       markerSize: 1,
       setLocation: (location) => set({ location }),
       setViewMode: (viewMode) => set({ viewMode }),
-      setSelectedStation: (selectedStationId) => set({ selectedStationId }),
+      setSelectedPoi: (selectedPoiId) => set({ selectedPoiId }),
       setSearchTerm: (searchTerm) => set({ searchTerm }),
       setMapTheme: (mapTheme) => set({ mapTheme }),
       setMarkerSize: (markerSize) => set({ markerSize }),
@@ -41,6 +41,6 @@ export const useAppStore = create<AppState>()(
     {
       name: 'viaplena-settings',
       partialize: (state) => ({ mapTheme: state.mapTheme, markerSize: state.markerSize }),
-    }
-  )
-);
+    },
+  ),
+)

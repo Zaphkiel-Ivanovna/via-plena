@@ -1,41 +1,42 @@
-"use client";
+'use client';
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { FUEL_LABELS, FUEL_NAMES } from "@/lib/constants";
-import { useFilterStore } from "@/stores/filter-store";
-import { Info } from "lucide-react";
-import type { FuelType } from "@/types/station";
-
-const FUEL_TYPES = Object.keys(FUEL_LABELS) as FuelType[];
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { FUEL_LABELS, FUEL_NAMES, FUEL_NAMES_ORDER } from '@/lib/constants';
+import { useFilterStore } from '@/stores/filter-store';
+import { cn } from '@/lib/utils';
+import { CHIP_ITEM_CLASS } from './segmented';
 
 export function FuelTypeFilter() {
-  const fuelTypes = useFilterStore((s) => s.fuelTypes);
-  const toggleFuelType = useFilterStore((s) => s.toggleFuelType);
+  const fuel = useFilterStore((s) => s.fuelTypes[0] ?? '');
+  const setFuelTypes = useFilterStore((s) => s.setFuelTypes);
 
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold">Type de carburant</h4>
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Info className="size-3 shrink-0 text-primary/70" />
-        Sélectionnez un carburant pour afficher les prix sur la carte
-      </p>
-      <div className="space-y-2">
-        {FUEL_TYPES.map((fuel) => (
-          <label key={fuel} className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={fuelTypes.includes(fuel)}
-              onCheckedChange={() => toggleFuelType(fuel)}
-            />
-            <span className="text-sm">
-              <span className="font-medium">{FUEL_LABELS[fuel]}</span>
-              <span className="text-muted-foreground">
-                {" "}
-                — {FUEL_NAMES[fuel]}
-              </span>
-            </span>
-          </label>
-        ))}
+      <div className="space-y-1">
+        <h4 className="text-sm font-semibold">Carburant</h4>
+        <p className="text-xs text-muted-foreground">Choisissez-en un pour afficher son prix sur la carte.</p>
       </div>
+      <ToggleGroup
+        type="single"
+        spacing={1.5}
+        value={fuel}
+        onValueChange={(v) => setFuelTypes(v ? [v] : [])}
+        className="grid w-full grid-cols-2"
+        aria-label="Carburant"
+      >
+        {FUEL_NAMES_ORDER.map((name) => (
+          <ToggleGroupItem
+            key={name}
+            value={name}
+            className={cn(CHIP_ITEM_CLASS, 'h-auto flex-col items-start justify-start gap-0 rounded-xl px-3 py-2 text-left text-foreground')}
+          >
+            <span className="text-sm font-semibold">{FUEL_LABELS[name]}</span>
+            <span className="w-full text-[11px] leading-tight font-normal whitespace-normal text-muted-foreground">
+              {FUEL_NAMES[name].replace('-', '\u2011')}
+            </span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
     </div>
   );
 }
