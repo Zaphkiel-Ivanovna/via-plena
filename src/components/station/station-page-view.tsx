@@ -9,22 +9,15 @@ import { SiteFooter } from '@/components/layout/site-footer';
 import { useMapThemeClass } from '@/hooks/use-map-theme-class';
 import { useFilterStore } from '@/stores/filter-store';
 import { isEv, isGas, type Poi } from '@/lib/poi';
-import {
-  chargingPoints,
-  formatParisDateTime,
-  formatPoiAddress,
-  formatPriceValue,
-  formatRelativeTime,
-  latestFuelUpdate,
-} from '@/lib/poi-details';
+import { formatParisDateTime, formatPoiAddress, formatPriceValue, latestFuelUpdate } from '@/lib/poi-details';
 import { formatDistanceMeters } from '@/lib/format';
-import { fuelLabel, fuelSearchName } from '@/lib/constants';
-import { GAS_PRICE_MAX_AGE_DAYS } from '@/lib/seo/indexability';
+import { fuelLabel } from '@/lib/constants';
 import { getAppleMapsUrl, getGoogleMapsUrl, getWazeUrl } from '@/lib/station-utils';
 import { cn } from '@/lib/utils';
 import { BrandIcon } from './brand-icon';
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { NearbySection } from '@/lib/nearby';
 
 const StationMap = dynamic(() => import('./station-map').then((m) => m.StationMap), {
   ssr: false,
@@ -45,21 +38,21 @@ import {
   gasStatus,
   sharePoi,
   useLiveCharging,
+  timeAgo,
   useNow,
 } from './poi-sections';
 import { CreditCard } from 'lucide-react';
 
 interface StationPageViewProps {
   poi: Poi;
-  renderedAt: number;
-  nearby: { poi: Poi; distance: number | null }[];
+  nearby: NearbySection | null;
 }
 
 const PANEL = 'island-panel rounded-3xl';
 
-export function StationPageView({ poi, renderedAt, nearby }: StationPageViewProps) {
+export function StationPageView({ poi, nearby }: StationPageViewProps) {
   useMapThemeClass();
-  const now = useNow(renderedAt);
+  const now = useNow();
   const charging = useLiveCharging(poi);
   const preferredFuel = useFilterStore((s) => s.fuelTypes[0]);
 
@@ -150,7 +143,7 @@ export function StationPageView({ poi, renderedAt, nearby }: StationPageViewProp
               </div>
             )}
 
-            {nearby.length > 0 && <Nearby poi={poi} nearby={nearby} now={now} />}
+            {nearby && <Nearby section={nearby} />}
 
             <SourceNote poi={poi} now={now} />
           </div>
@@ -161,66 +154,36 @@ export function StationPageView({ poi, renderedAt, nearby }: StationPageViewProp
   );
 }
 
-const shortName = (p: Poi) => p.name.split(' | ').slice(-1)[0];
-
-const fuelPrice = (p: Poi, fuel: string, now: Date): number | null => {
-  if (!isGas(p)) return null;
-  const f = p.data.fuels.find((x) => x.name === fuel);
-  if (f?.price == null || !f.lastUpdate) return null;
-  return now.getTime() - Date.parse(f.lastUpdate) <= GAS_PRICE_MAX_AGE_DAYS * 86_400_000 ? f.price : null;
-};
-
-function Nearby({ poi, nearby, now }: { poi: Poi; nearby: StationPageViewProps['nearby']; now: Date }) {
-  let summary: string | null = null;
-  const fuel = isGas(poi) ? ['Gazole', 'E10', 'SP95', 'SP98'].find((f) => fuelPrice(poi, f, now) != null) : undefined;
-
-  if (isGas(poi)) {
-    const own = fuel ? fuelPrice(poi, fuel, now) : null;
-    const others = fuel ? nearby.map((n) => fuelPrice(n.poi, fuel, now)).filter((x): x is number => x != null) : [];
-    if (fuel && own != null && others.length >= 2) {
-      const avg = others.reduce((a, b) => a + b, 0) / others.length;
-      const cents = Math.round((own - avg) * 1000) / 10;
-      const gap =
-        Math.abs(cents) < 0.5
-          ? 'au même niveau que'
-          : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(Math.abs(cents))} centimes ${cents < 0 ? 'de moins que' : 'de plus que'}`;
-      summary = `Ici, le ${fuelSearchName(fuel).replace(/^Gazole$/, 'gazole')} est à ${formatPriceValue(own)} €/L, ${gap} la moyenne des ${others.length} stations voisines (${formatPriceValue(avg)} €/L) dans un rayon de 3 km.`;
-    }
-  } else if (isEv(poi)) {
-    const fast = nearby.filter((n) => isEv(n.poi) && chargingPoints(n.poi.data).some((cp) => cp.nominalPower >= 50)).length;
-    summary = `${nearby.length} autre${nearby.length > 1 ? 's' : ''} station${nearby.length > 1 ? 's' : ''} de recharge à moins de 3 km${fast ? `, dont ${fast} rapide${fast > 1 ? 's' : ''} (50 kW et plus)` : ''}.`;
-  }
-
+function Nearby({ section }: { section: NearbySection }) {
   return (
     <section aria-labelledby="nearby-title" className={cn(PANEL, 'p-5 md:p-7')}>
       <h2 id="nearby-title" className="text-base font-semibold">
-        {isEv(poi) ? 'Autres bornes à proximité' : 'Stations-service à proximité'}
+        {section.kind === 'ev' ? 'Autres bornes à proximité' : 'Stations-service à proximité'}
       </h2>
-      {summary && <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-muted-foreground">{summary}</p>}
+      {section.summary && (
+        <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-muted-foreground">{section.summary}</p>
+      )}
       <ul className="mt-4 divide-y divide-[var(--island-separator-bg)]">
-        {nearby.map(({ poi: n, distance }) => {
-          const price = fuel ? fuelPrice(n, fuel, now) : null;
-          return (
-            <li key={n.id}>
-              <Link href={`/station/${n.id}`} className="flex items-center gap-3 py-2.5 text-sm hover:text-foreground">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{shortName(n)}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{formatPoiAddress(n)}</span>
+        {section.rows.map((row) => (
+          <li key={row.id}>
+            <Link href={`/station/${row.id}`} className="flex items-center gap-3 py-2.5 text-sm hover:text-foreground">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{row.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">{row.address}</span>
+              </span>
+              {section.fuel && row.price != null && (
+                <span className="shrink-0 text-xs tabular-nums">
+                  <span className="text-muted-foreground">{fuelLabel(section.fuel)}</span> {formatPriceValue(row.price)} €
                 </span>
-                {fuel && price != null && (
-                  <span className="shrink-0 text-xs tabular-nums">
-                    <span className="text-muted-foreground">{fuelLabel(fuel)}</span> {formatPriceValue(price)} €
-                  </span>
-                )}
-                {distance != null && (
-                  <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                    {formatDistanceMeters(distance)}
-                  </span>
-                )}
-              </Link>
-            </li>
-          );
-        })}
+              )}
+              {row.distance != null && (
+                <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                  {formatDistanceMeters(row.distance)}
+                </span>
+              )}
+            </Link>
+          </li>
+        ))}
       </ul>
     </section>
   );
@@ -259,7 +222,7 @@ function RouteActions({ poi }: { poi: Poi }) {
   );
 }
 
-function SourceNote({ poi, now }: { poi: Poi; now: Date }) {
+function SourceNote({ poi, now }: { poi: Poi; now: Date | null }) {
   const updated = isGas(poi)
     ? latestFuelUpdate(poi.data)
     : isEv(poi)
@@ -301,7 +264,7 @@ function SourceNote({ poi, now }: { poi: Poi; now: Date }) {
           {' '}
           {isEv(poi) ? 'Fiche de la borne mise à jour' : 'Dernière mise à jour'}{' '}
           <time dateTime={updated.toISOString()} title={formatParisDateTime(updated)}>
-            {formatRelativeTime(updated, now)}
+            {timeAgo(updated, now)}
           </time>
           .
         </>

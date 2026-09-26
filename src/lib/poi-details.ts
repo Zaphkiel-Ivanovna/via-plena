@@ -317,14 +317,32 @@ export function evPayment(points: EvChargingPoint[]): EvPayment {
 
 export type EvPricing = { kind: 'link'; url: string } | { kind: 'text'; text: string }
 
+export function usefulPricing(raw: string | null): string | null {
+  const value = raw?.trim()
+  if (!value || /^inconnu$/i.test(value)) return null
+  return /^https?:\/\//i.test(value) || value.length <= 80 ? value : null
+}
+
 export function evPricing(points: EvChargingPoint[]): EvPricing | null {
   for (const p of points) {
-    const value = p.pricing?.trim()
-    if (!value || /^inconnu$/i.test(value)) continue
-    if (/^https?:\/\//i.test(value)) return { kind: 'link', url: value }
-    if (value.length <= 80) return { kind: 'text', text: value }
+    const value = usefulPricing(p.pricing)
+    if (!value) continue
+    return /^https?:\/\//i.test(value) ? { kind: 'link', url: value } : { kind: 'text', text: value }
   }
   return null
+}
+
+export function stripLiveData(p: Poi): Poi {
+  if (!('chargingPoints' in p.data)) return p
+  const points = p.data.chargingPoints.map((cp) => ({ ...cp, realtime: null, pricing: usefulPricing(cp.pricing) }))
+  return {
+    ...p,
+    data: {
+      ...p.data,
+      chargingPoints: points,
+      availability: { total: points.length, available: 0, occupied: 0, outOfService: 0, unknown: points.length, lastObservedAt: null },
+    },
+  }
 }
 
 export const isAlwaysOpenEv = (data: EvStationData): boolean =>

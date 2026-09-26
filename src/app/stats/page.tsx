@@ -10,7 +10,7 @@ import { FUEL_NAMES_ORDER, fuelFullName, fuelLabel } from '@/lib/constants';
 import { formatPriceValue } from '@/lib/poi-details';
 import { DATA_SOURCES, SITE_URL } from '@/lib/site';
 
-export const revalidate = 600;
+export const revalidate = 3600;
 
 const PAGE_URL = `${SITE_URL}/stats`;
 const count = new Intl.NumberFormat('fr-FR');

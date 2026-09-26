@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
@@ -61,17 +62,21 @@ const STALE_PRICE_DAYS = 7;
 const SERVICES_PREVIEW = 6;
 export const REALTIME_POLL_MS = 60_000;
 
-export function useNow(initial?: number): Date {
-  const [now, setNow] = useState(() => (initial !== undefined ? new Date(initial) : new Date()));
+export function useNow(): Date | null {
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    const catchUp = initial !== undefined ? setTimeout(() => setNow(new Date()), 0) : undefined;
+    const first = setTimeout(() => setNow(new Date()), 0);
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => {
-      clearTimeout(catchUp);
+      clearTimeout(first);
       clearInterval(id);
     };
-  }, [initial]);
+  }, []);
   return now;
+}
+
+export function timeAgo(date: Date, now: Date | null): string {
+  return now ? formatRelativeTime(date, now) : `le ${formatParisDateTime(date)}`;
 }
 
 export const displayName = (p: Poi): string => {
@@ -82,11 +87,12 @@ export const displayName = (p: Poi): string => {
 export interface LiveCharging {
   points: EvChargingPoint[];
   availability: Availability;
+  pending: boolean;
 }
 
 export function useLiveCharging(poi: Poi): LiveCharging | null {
   const ev = isEv(poi);
-  const { data: response } = useGetPoiStatus(poi.id, {
+  const { data: response, isPending } = useGetPoiStatus(poi.id, {
     query: { enabled: ev, refetchInterval: REALTIME_POLL_MS, refetchIntervalInBackground: false },
   });
 
@@ -99,11 +105,13 @@ export function useLiveCharging(poi: Poi): LiveCharging | null {
           )
         : null;
     const points = withLiveRealtime(chargingPoints(poi.data), live);
-    return { points, availability: summarizeAvailability(points) };
-  }, [poi, response]);
+    const pending = isPending && !points.some((cp) => cp.realtime);
+    return { points, availability: summarizeAvailability(points), pending };
+  }, [poi, response, isPending]);
 }
 
-export function gasStatus(data: GasStationData, now: Date): OpenStatus | null {
+export function gasStatus(data: GasStationData, now: Date | null): OpenStatus | null {
+  if (!now) return null;
   const week = parseGasSchedule(data);
   return week ? getOpenStatus(week, now) : null;
 }
@@ -128,13 +136,13 @@ export function EvSummaryPills({
 }: {
   data: EvStationData;
   charging: LiveCharging;
-  now: Date;
+  now: Date | null;
 }) {
   const maxPower = points.reduce((max, p) => Math.max(max, p.nominalPower), 0);
   return (
     <>
       {hasRealtime(availability) && (
-        <AvailabilityPill availability={availability} stale={isRealtimeStale(availability, now)} />
+        <AvailabilityPill availability={availability} stale={now ? isRealtimeStale(availability, now) : false} />
       )}
       {maxPower > 0 && (
         <Pill tone="positive" icon={Zap}>
@@ -147,7 +155,7 @@ export function EvSummaryPills({
   );
 }
 
-export function GasSections({ data, now }: { data: GasStationData; now: Date }) {
+export function GasSections({ data, now }: { data: GasStationData; now: Date | null }) {
   return (
     <>
       <FuelPrices data={data} now={now} />
@@ -157,7 +165,7 @@ export function GasSections({ data, now }: { data: GasStationData; now: Date }) 
   );
 }
 
-function FuelPrices({ data, now }: { data: GasStationData; now: Date }) {
+function FuelPrices({ data, now }: { data: GasStationData; now: Date | null }) {
   const selectedFuel = useFilterStore((s) => s.fuelTypes[0]);
   const order = (name: string) => {
     const i = (FUEL_NAMES_ORDER as readonly string[]).indexOf(name);
@@ -168,7 +176,7 @@ function FuelPrices({ data, now }: { data: GasStationData; now: Date }) {
     .sort((a, b) => order(a.name) - order(b.name));
   const outages = temporaryOutages(data);
   const latest = latestFuelUpdate(data);
-  const staleDays = latest ? (now.getTime() - latest.getTime()) / 86_400_000 : 0;
+  const staleDays = latest && now ? (now.getTime() - latest.getTime()) / 86_400_000 : 0;
 
   if (fuels.length === 0 && outages.length === 0) {
     return (
@@ -181,7 +189,7 @@ function FuelPrices({ data, now }: { data: GasStationData; now: Date }) {
   return (
     <Section
       title="Prix des carburants"
-      aside={latest && <span title={formatParisDateTime(latest)}>Mis à jour {formatRelativeTime(latest, now)}</span>}
+      aside={latest && <span title={formatParisDateTime(latest)}>Mis à jour {timeAgo(latest, now)}</span>}
     >
       {staleDays > STALE_PRICE_DAYS && (
         <p className="mb-3 flex items-start gap-2 rounded-2xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -218,7 +226,7 @@ function FuelPrices({ data, now }: { data: GasStationData; now: Date }) {
             <span className="text-xs font-medium text-muted-foreground">{fuelLabel(o.name)}</span>
             <p className="mt-1 text-sm font-medium">Rupture</p>
             {o.since && (
-              <p className="text-[11px] text-muted-foreground">Signalée {formatRelativeTime(new Date(o.since), now)}</p>
+              <p className="text-[11px] text-muted-foreground">Signalée {timeAgo(new Date(o.since), now)}</p>
             )}
           </li>
         ))}
@@ -227,10 +235,10 @@ function FuelPrices({ data, now }: { data: GasStationData; now: Date }) {
   );
 }
 
-function Schedule({ data, now }: { data: GasStationData; now: Date }) {
+function Schedule({ data, now }: { data: GasStationData; now: Date | null }) {
   const week = parseGasSchedule(data);
   if (!week || week.every((d) => d.allDay)) return null;
-  const today = mondayIndex(now);
+  const today = now ? mondayIndex(now) : -1;
 
   return (
     <Collapsible asChild>
@@ -238,7 +246,9 @@ function Schedule({ data, now }: { data: GasStationData; now: Date }) {
         <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <div>
             <h3 className="text-sm font-semibold">Horaires</h3>
-            <p className="text-xs text-muted-foreground">Aujourd&apos;hui : {formatDayHours(week[today])}</p>
+            <p className="text-xs text-muted-foreground">
+              {today >= 0 ? `Aujourd'hui : ${formatDayHours(week[today])}` : 'Horaires de la semaine'}
+            </p>
           </div>
           <span className="island-interactive flex size-8 items-center justify-center rounded-full">
             <ChevronDown className="size-4 transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none" aria-hidden />
@@ -306,14 +316,14 @@ function Services({ services }: { services: string[] }) {
 
 export function EvSections({
   data,
-  charging: { points, availability },
+  charging: { points, availability, pending },
   now,
 }: {
   data: EvStationData;
   charging: LiveCharging;
-  now: Date;
+  now: Date | null;
 }) {
-  const live = hasRealtime(availability);
+  const live = !pending && hasRealtime(availability);
   const groups = groupChargingPoints(points);
   const payment = evPayment(points);
   const pricing = evPricing(points);
@@ -336,7 +346,9 @@ export function EvSections({
         title={`${count} point${count > 1 ? 's' : ''} de charge`}
         aside={data.isTwoWheelerStation ? 'Deux-roues' : undefined}
       >
-        {live ? (
+        {pending ? (
+          <Skeleton className="mb-3 h-8 w-full rounded-xl" />
+        ) : live ? (
           <AvailabilityBreakdown availability={availability} now={now} />
         ) : (
           <p className="mb-3 text-xs text-muted-foreground">
@@ -418,7 +430,7 @@ export function EvSections({
         </div>
         {updated && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Données mises à jour {formatRelativeTime(new Date(updated), now)}
+            Données mises à jour {timeAgo(new Date(updated), now)}
           </p>
         )}
       </Section>
@@ -480,9 +492,9 @@ export function AvailabilityPill({ availability: a, stale }: { availability: Ava
   );
 }
 
-function AvailabilityBreakdown({ availability: a, now }: { availability: Availability; now: Date }) {
+function AvailabilityBreakdown({ availability: a, now }: { availability: Availability; now: Date | null }) {
   const states = STATE_ORDER.filter((s) => a[s] > 0);
-  const stale = isRealtimeStale(a, now);
+  const stale = now ? isRealtimeStale(a, now) : false;
   return (
     <div className="mb-3 space-y-2">
       {stale && a.lastObservedAt && (
@@ -490,7 +502,7 @@ function AvailabilityBreakdown({ availability: a, now }: { availability: Availab
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
           <div className="space-y-0.5">
             <p className="font-semibold">
-              Donnée ancienne : dernier signal {formatRelativeTime(a.lastObservedAt, now)}
+              Donnée ancienne : dernier signal {timeAgo(a.lastObservedAt, now)}
             </p>
             <p>
               Cette disponibilité n&apos;est pas vérifiée. La borne n&apos;est peut-être plus à jour, voire
@@ -518,7 +530,7 @@ function AvailabilityBreakdown({ availability: a, now }: { availability: Availab
         </p>
         {a.lastObservedAt && !stale && (
           <span className="text-muted-foreground" title={formatParisDateTime(a.lastObservedAt)}>
-            Dernier signal {formatRelativeTime(a.lastObservedAt, now)}
+            Dernier signal {timeAgo(a.lastObservedAt, now)}
           </span>
         )}
       </div>

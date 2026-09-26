@@ -197,7 +197,7 @@ function PoiHeader({
   poi: Poi;
   titles: TitleComponents;
   onClose: () => void;
-  now: Date;
+  now: Date | null;
   charging: LiveCharging | null;
 }) {
   const distance = distanceMeters(poi);

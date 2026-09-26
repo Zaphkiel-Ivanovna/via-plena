@@ -13,7 +13,7 @@ import { isEv, isGas, type Poi } from '@/lib/poi';
 import { chargingPoints, formatPoiAddress, formatPower, formatPriceValue } from '@/lib/poi-details';
 import { SITE_URL } from '@/lib/site';
 
-export const revalidate = 300;
+export const revalidate = 10800;
 
 export async function generateStaticParams() {
   return [];
@@ -23,7 +23,8 @@ interface CommunePageProps {
   params: Promise<{ ville: string }>;
 }
 
-const VISIBLE_ROWS = 30;
+const GAS_ROWS = 40;
+const EV_ROWS = 30;
 const count = new Intl.NumberFormat('fr-FR');
 const plural = (n: number, one: string, many: string) => `${count.format(n)} ${n > 1 ? many : one}`;
 
@@ -42,7 +43,7 @@ export async function generateMetadata({ params }: CommunePageProps): Promise<Me
   const data = await loadCommuneBySlug(ville);
   if (!data) return { title: 'Commune introuvable', robots: { index: false } };
 
-  const { commune, gas, ev, fuels, availability } = data;
+  const { commune, gas, ev, fuels } = data;
   const gazole = fuels.find((f) => f.fuel === 'Gazole');
   const lead = gazole ?? fuels[0];
   const title = lead
@@ -56,8 +57,7 @@ export async function generateMetadata({ params }: CommunePageProps): Promise<Me
     .slice(0, 3)
     .map((f) => `${fuelSearchName(f.fuel)} dès ${formatPriceValue(f.min)} €`)
     .join(', ');
-  const live = availability.available > 0 ? ` ${plural(availability.available, 'point de charge libre', 'points de charge libres')} en ce moment.` : '';
-  const description = `${parts.join(' et ')} ${inCity(commune.name)} (${commune.postalCode}).${prices ? ` ${prices}.` : ''}${live} Prix officiels mis à jour en continu.`;
+  const description = `${parts.join(' et ')} ${inCity(commune.name)} (${commune.postalCode}).${prices ? ` ${prices}.` : ''} Prix officiels mis à jour en continu.`;
   const url = `${SITE_URL}${communePath(commune.slug)}`;
 
   return {
@@ -69,9 +69,11 @@ export async function generateMetadata({ params }: CommunePageProps): Promise<Me
   };
 }
 
-function communeJsonLd({ commune, gas, ev }: CommuneData) {
+function communeJsonLd(data: CommuneData) {
+  const { commune } = data;
   const url = `${SITE_URL}${communePath(commune.slug)}`;
-  const stations = [...gas, ...ev];
+  const shown = shownPois(data);
+  const stations = [...shown.gas, ...shown.ev];
   return {
     '@context': 'https://schema.org',
     '@graph': [
@@ -96,7 +98,7 @@ function communeJsonLd({ commune, gas, ev }: CommuneData) {
         mainEntity: {
           '@type': 'ItemList',
           numberOfItems: stations.length,
-          itemListElement: stations.slice(0, 100).map((p, i) => ({
+          itemListElement: stations.map((p, i) => ({
             '@type': 'ListItem',
             position: i + 1,
             url: `${SITE_URL}/station/${p.id}`,
@@ -122,9 +124,9 @@ export default async function CommunePage({ params }: CommunePageProps) {
   const data = await loadCommuneBySlug(ville);
   if (!data) notFound();
 
-  const { commune, gas, ev, fuels, evPoints, evFast, evFree, availability } = data;
+  const { commune, gas, ev, fuels, evPoints, evFast, evFree } = data;
   const gazole = fuels.find((f) => f.fuel === 'Gazole');
-  const sortedGas = [...gas].sort((a, b) => leadPrice(a) - leadPrice(b));
+  const shown = shownPois(data);
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -161,8 +163,6 @@ export default async function CommunePage({ params }: CommunePageProps) {
           {ev.length > 0
             ? `On y trouve aussi ${plural(ev.length, 'station de recharge', 'stations de recharge')} (${plural(evPoints, 'point de charge', 'points de charge')})${evExtras(evFast, evFree)}.`
             : ''}
-          {availability.available > 0 &&
-            ` ${plural(availability.available, 'point de charge est libre', 'points de charge sont libres')} selon les dernières données des opérateurs.`}
         </p>
 
         {fuels.length > 0 && (
@@ -206,11 +206,12 @@ export default async function CommunePage({ params }: CommunePageProps) {
           </section>
         )}
 
-        {sortedGas.length > 0 && (
+        {gas.length > 0 && (
           <PoiListSection
             id="gas-stations"
             title={`Stations-service ${inCity(commune.name)}`}
-            pois={sortedGas}
+            total={gas.length}
+            pois={shown.gas}
             renderRow={(p) => <GasRow poi={p} />}
           />
         )}
@@ -219,7 +220,8 @@ export default async function CommunePage({ params }: CommunePageProps) {
           <PoiListSection
             id="ev-stations"
             title={`Bornes de recharge ${inCity(commune.name)}`}
-            pois={ev}
+            total={ev.length}
+            pois={shown.ev}
             renderRow={(p) => <EvRow poi={p} />}
           />
         )}
@@ -239,6 +241,18 @@ export default async function CommunePage({ params }: CommunePageProps) {
   );
 }
 
+const maxPower = (p: Poi) => (isEv(p) ? chargingPoints(p.data).reduce((m, cp) => Math.max(m, cp.nominalPower), 0) : 0);
+const pointCount = (p: Poi) => (isEv(p) ? chargingPoints(p.data).length : 0);
+
+function shownPois({ gas, ev }: CommuneData): { gas: Poi[]; ev: Poi[] } {
+  return {
+    gas: [...gas].sort((a, b) => leadPrice(a) - leadPrice(b)).slice(0, GAS_ROWS),
+    ev: [...ev]
+      .sort((a, b) => maxPower(b) - maxPower(a) || pointCount(b) - pointCount(a))
+      .slice(0, EV_ROWS),
+  };
+}
+
 function leadPrice(p: Poi): number {
   if (!isGas(p)) return Infinity;
   const gazole = p.data.fuels.find((f) => f.name === 'Gazole')?.price;
@@ -248,23 +262,17 @@ function leadPrice(p: Poi): number {
 function PoiListSection({
   id,
   title,
+  total,
   pois,
   renderRow,
 }: {
   id: string;
   title: string;
+  total: number;
   pois: Poi[];
   renderRow: (p: Poi) => ReactNode;
 }) {
-  const visible = pois.slice(0, VISIBLE_ROWS);
-  const rest = pois.slice(VISIBLE_ROWS);
-  const list = (items: Poi[]) => (
-    <ul className="divide-y divide-[var(--island-separator-bg)]">
-      {items.map((p) => (
-        <li key={p.id}>{renderRow(p)}</li>
-      ))}
-    </ul>
-  );
+  const rest = total - pois.length;
 
   return (
     <section aria-labelledby={id} className="mt-10">
@@ -272,15 +280,19 @@ function PoiListSection({
         {title} <span className="text-sm font-normal text-muted-foreground">({count.format(pois.length)})</span>
       </h2>
       <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--island-subtle-border)]">
-        {list(visible)}
-        {rest.length > 0 && (
-          <details className="group border-t border-[var(--island-separator-bg)]">
-            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium hover:bg-[var(--island-subtle-bg)]">
-              <span className="group-open:hidden">Afficher les {count.format(rest.length)} autres</span>
-              <span className="hidden group-open:inline">Masquer</span>
-            </summary>
-            <div className="border-t border-[var(--island-separator-bg)]">{list(rest)}</div>
-          </details>
+        <ul className="divide-y divide-[var(--island-separator-bg)]">
+          {pois.map((p) => (
+            <li key={p.id}>{renderRow(p)}</li>
+          ))}
+        </ul>
+        {rest > 0 && (
+          <p className="border-t border-[var(--island-separator-bg)] px-4 py-3 text-sm text-muted-foreground">
+            Et {count.format(rest)} autre{rest > 1 ? 's' : ''},{' '}
+            <Link href="/" className="font-medium text-foreground underline underline-offset-4">
+              à retrouver sur la carte
+            </Link>
+            .
+          </p>
         )}
       </div>
     </section>

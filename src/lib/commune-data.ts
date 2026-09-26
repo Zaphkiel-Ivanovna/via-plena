@@ -5,10 +5,11 @@ import { ApiError, nextCursor } from '@/api/fetcher'
 import type { CommuneSingle } from '@/api/generated/models'
 import { FUEL_NAMES_ORDER } from '@/lib/constants'
 import { isEv, isGas, type Poi } from '@/lib/poi'
-import { chargingPoints, summarizeAvailability, type Availability } from '@/lib/poi-details'
+import { chargingPoints } from '@/lib/poi-details'
+import { latestPriceTime } from '@/lib/nearby'
 import { GAS_PRICE_MAX_AGE_DAYS } from '@/lib/seo/indexability'
 
-export const COMMUNE_REVALIDATE = 300
+export const COMMUNE_REVALIDATE = 10800
 
 const PAGE_SIZE = 200
 const MAX_PAGES = 15
@@ -29,7 +30,6 @@ export interface CommuneData {
   evPoints: number
   evFast: number
   evFree: number
-  availability: Availability
   indexable: boolean
 }
 
@@ -116,7 +116,8 @@ export const loadCommuneBySlug = cache(async (slug: string): Promise<CommuneData
 
 async function loadCommuneData(commune: CommuneSingle): Promise<CommuneData> {
   const pois = await loadAllPois(commune.insee)
-  const gas = withFreshPrices(pois.filter(isGas), Date.now())
+  const allGas = pois.filter(isGas)
+  const gas = withFreshPrices(allGas, latestPriceTime(allGas))
   const ev = pois.filter(isEv)
   const points = ev.flatMap((p) => (isEv(p) ? chargingPoints(p.data) : []))
 
@@ -128,7 +129,6 @@ async function loadCommuneData(commune: CommuneSingle): Promise<CommuneData> {
     evPoints: points.length,
     evFast: ev.filter((p) => isEv(p) && chargingPoints(p.data).some((cp) => cp.nominalPower >= 50)).length,
     evFree: ev.filter((p) => isEv(p) && chargingPoints(p.data).some((cp) => cp.isFree)).length,
-    availability: summarizeAvailability(points),
     indexable: isCommuneIndexable(gas.length, ev.length),
   }
 }

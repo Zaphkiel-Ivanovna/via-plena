@@ -5,7 +5,7 @@ import { findPoisNearby, getPoiById } from '@/api/generated/poi/poi';
 import { ApiError } from '@/api/fetcher';
 import { StationPageView } from '@/components/station/station-page-view';
 import { FUEL_NAMES_ORDER, fuelFullName, fuelSearchName } from '@/lib/constants';
-import { distanceMeters, isEv, isGas, type Poi } from '@/lib/poi';
+import { isEv, isGas, type Poi } from '@/lib/poi';
 import {
   PLUG_LABELS,
   chargingPoints,
@@ -15,13 +15,15 @@ import {
   isAlwaysOpenEv,
   parseGasSchedule,
   streetLabel,
+  stripLiveData,
   type PlugKind,
 } from '@/lib/poi-details';
 import { poiIndexVerdict } from '@/lib/seo/indexability';
+import { buildNearby } from '@/lib/nearby';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 import { describeService } from '@/components/station/service-icon';
 
-export const revalidate = 300;
+export const revalidate = 10800;
 
 export async function generateStaticParams() {
   return [];
@@ -38,7 +40,7 @@ interface StationPageProps {
 const loadPoi = cache(async (id: string) => {
   try {
     const res = await getPoiById(id, { next: { revalidate } });
-    return { poi: res.data as Poi, renderedAt: Date.now() };
+    return { poi: res.data as Poi };
   } catch (error) {
     if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) return null;
     throw error;
@@ -115,7 +117,7 @@ export async function generateMetadata({ params }: StationPageProps): Promise<Me
   const loaded = await loadPoi(id);
   if (!loaded) return { title: 'Station introuvable', robots: { index: false } };
 
-  const { poi, renderedAt } = loaded;
+  const { poi } = loaded;
   const name = cleanName(poi);
   const url = `${SITE_URL}/station/${poi.id}`;
   const title = stationTitle(poi);
@@ -136,7 +138,7 @@ export async function generateMetadata({ params }: StationPageProps): Promise<Me
     title,
     description,
     alternates: { canonical: url },
-    robots: { index: poiIndexVerdict(poi, renderedAt).index, follow: true },
+    robots: { index: poiIndexVerdict(poi, Date.now()).index, follow: true },
     openGraph: { type: 'website', url, title: title.absolute, description, siteName: SITE_NAME, locale: 'fr_FR' },
     twitter: { card: 'summary', title: title.absolute, description },
   };
@@ -259,9 +261,8 @@ export default async function StationPage({ params }: StationPageProps) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(buildJsonLd(loaded.poi))} />
       <StationPageView
-        poi={loaded.poi}
-        renderedAt={loaded.renderedAt}
-        nearby={nearby.map((p) => ({ poi: p, distance: distanceMeters(p) }))}
+        poi={stripLiveData(loaded.poi)}
+        nearby={buildNearby(loaded.poi, nearby)}
       />
     </>
   );

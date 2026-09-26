@@ -7,7 +7,7 @@ import { FUEL_NAMES_ORDER, fuelFullName, fuelLabel } from '@/lib/constants';
 import { formatPriceValue } from '@/lib/poi-details';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from '@/lib/site';
 
-export const revalidate = 600;
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: { absolute: `${SITE_TAGLINE} | ${SITE_NAME}` },
